@@ -69,16 +69,26 @@ p,span,div,label{
 
 st.sidebar.title("🎓 Jaipuria")
 
+# IMPORTANT PERFORMANCE FIX
+# Data is kept in Streamlit session_state after the first load.
+# Earlier, st.cache_data returned a fresh copy of large DataFrames on every
+# tab click/rerun, which could make navigation noticeably slow.
+if st.sidebar.button("🔄 Refresh Live Data", use_container_width=True):
+    for _k in ["_jaipuria_data", "_jaipuria_data_loaded"]:
+        st.session_state.pop(_k, None)
+    st.cache_data.clear()
+    st.rerun()
+
 page = st.sidebar.radio(
     "Navigation",
     [
-        "🏠 Summary",
+        "🚀 Command Center",
+        "🎯 Insights",
         "👨 Gender",
         "🎓 Stream",
         "📝 Entrance Exam",
         "📍 State & City",
         "👤 Owner Analysis",
-        "🏢 Campus Analysis",
         "💰 Scholarship",
         "📥 Download Report"
     ]
@@ -88,457 +98,1686 @@ page = st.sidebar.radio(
 
 st.title("🎓 Jaipuria Admission Dashboard")
 st.subheader("Live Google Sheet Connected 🟢")
-
 st.divider()
+
 SHEET_ID = "1RKLRXNSFxeq4kXEYxA9y0EFuK-5Ozukrr3ejjxm0764"
 
+# ============================================================
+# FAST DATA LOADING
+# Google Sheet data is downloaded only once per browser session.
+# All tab switches reuse the same in-memory DataFrames.
+# ============================================================
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_sheet(gid, batch):
-
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={gid}"
+    data = pd.read_csv(url, low_memory=False)
+    data.columns = data.columns.astype(str).str.strip()
+    data["Batch"] = batch
+    return data
 
-    df = pd.read_csv(url)
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_all_data():
+    df2026 = load_sheet(0, "2026-28")
+    df2025 = load_sheet(1713921462, "2025-27")
+    df2024 = load_sheet(1951957125, "2024-26")
+    combined = pd.concat([df2026, df2025, df2024], ignore_index=True, copy=False)
+    return df2026, df2025, df2024, combined
 
-    df.columns = df.columns.str.strip()
+# session_state avoids repeated cache deserialization/copying on every widget click
+if "_jaipuria_data" not in st.session_state:
+    with st.spinner("Loading admission data for the first time..."):
+        st.session_state["_jaipuria_data"] = load_all_data()
 
-    df["Batch"] = batch
+df2026, df2025, df2024, df = st.session_state["_jaipuria_data"]
 
-    return df
+if page == "🎯 Insights":
 
+    st.header("🎯 Insights Dashboard")
+    admitted_status = ["FULL FEE", "PARTIAL FEE", "WAITLIST FEE"]
+    summary_df = df[df["Final Status"].isin(admitted_status)].copy()
 
-df2026 = load_sheet(0, "2026-28")
+    # ---------------- Modern Filters / Slicers ----------------
+    st.markdown("### 🎛️ Dashboard Filters")
+    f1,f2,f3,f4 = st.columns(4)
+    prog_col = "Final Course Selected" if "Final Course Selected" in summary_df.columns else None
+    gender_col = "Gender" if "Gender" in summary_df.columns else None
+    state_col = "Correspondence State" if "Correspondence State" in summary_df.columns else None
+    programs = sorted(summary_df[prog_col].dropna().astype(str).unique()) if prog_col else []
+    genders = sorted(summary_df[gender_col].dropna().astype(str).str.upper().unique()) if gender_col else []
+    states = sorted(summary_df[state_col].dropna().astype(str).unique()) if state_col else []
+    with f1:
+        batch_filter = st.selectbox("Batch", ["All Batches","2024-26","2025-27","2026-28"], key="summary_batch")
+    with f2:
+        programme_filter = st.selectbox("Programme", ["All Programmes"] + programs, key="summary_programme")
+    with f3:
+        gender_filter = st.selectbox("Gender", ["All Genders"] + genders, key="summary_gender")
+    with f4:
+        state_filter = st.selectbox("State", ["All States"] + states, key="summary_state")
 
-df2025 = load_sheet(1713921462, "2025-27")
+    filtered = summary_df.copy()
+    if batch_filter != "All Batches":
+        filtered = filtered[filtered["Batch"] == batch_filter]
+    if prog_col and programme_filter != "All Programmes":
+        filtered = filtered[filtered[prog_col].astype(str) == programme_filter]
+    if gender_col and gender_filter != "All Genders":
+        filtered = filtered[filtered[gender_col].astype(str).str.upper() == gender_filter]
+    if state_col and state_filter != "All States":
+        filtered = filtered[filtered[state_col].astype(str) == state_filter]
 
-df2024 = load_sheet(1951957125, "2024-26")
+    # ---------------- KPI Cards ----------------
+    academic_mask = pd.Series(True, index=filtered.index)
+    for c in ["10th Percentage","12th Percentage","Graduation Percentage"]:
+        if c in filtered.columns:
+            academic_mask &= pd.to_numeric(filtered[c], errors="coerce").ge(60)
+        else:
+            academic_mask &= False
+    eligible_df = filtered[academic_mask]
+    batch_counts = filtered.groupby("Batch").size().reindex(["2024-26","2025-27","2026-28"], fill_value=0)
 
-df = pd.concat(
-    [df2026, df2025, df2024],
-    ignore_index=True
-)
-if page == "🏠 Summary":
+    k1,k2,k3,k4 = st.columns(4)
+    k1.metric("👨‍🎓 Total Admitted Students", f"{len(filtered):,}")
+    k2.metric("🎯 60%+ Throughout", f"{len(eligible_df):,}")
+    k3.metric("🎓 Top Programme", (filtered[prog_col].mode().iloc[0] if prog_col and not filtered.empty and not filtered[prog_col].dropna().empty else "—"))
+    k4.metric("🏆 Best Performing Batch", (batch_counts.idxmax() if batch_counts.sum()>0 else "—"))
 
-    admitted_2024 = len(df2024[df2024["Final Status"].isin(["FULL FEE", "PARTIAL FEE", "WAITLIST FEE"])])
-    admitted_2025 = len(df2025[df2025["Final Status"].isin(["FULL FEE", "PARTIAL FEE", "WAITLIST FEE"])])
-    admitted_2026 = len(df2026[df2026["Final Status"].isin(["FULL FEE", "PARTIAL FEE", "WAITLIST FEE"])])
+    st.divider()
+    c1,c2 = st.columns(2, gap="large")
+    with c1:
+        st.subheader("📈 Total Admission Trend")
+        trend = batch_counts.rename_axis("Batch").reset_index(name="Students")
+        fig = px.line(trend, x="Batch", y="Students", markers=True, text="Students")
+        fig.update_traces(line_width=4, textposition="top center")
+        fig.update_layout(template="plotly_white", height=420, margin=dict(l=20,r=20,t=35,b=20), yaxis_title="Students")
+        st.plotly_chart(fig, use_container_width=True)
+    with c2:
+        st.subheader("🎯 Academic Quality by Batch")
+        q = eligible_df.groupby("Batch").size().reindex(["2024-26","2025-27","2026-28"], fill_value=0).rename_axis("Batch").reset_index(name="Students")
+        fig = px.bar(q, x="Batch", y="Students", text="Students", color="Batch")
+        fig.update_traces(textposition="outside")
+        fig.update_layout(template="plotly_white", height=420, showlegend=False, margin=dict(l=20,r=20,t=35,b=20))
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.header("📊 Summary Dashboard")
-
-    st.markdown("### 👨‍🎓 Total Admitted Students")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.metric("🎓 2024-26", admitted_2024)
-
-    with col2:
-        st.metric("🎓 2025-27", admitted_2025)
-
-    with col3:
-        st.metric("🎓 2026-28", admitted_2026)
-
-    st.markdown("---")
-    
-    st.markdown("""
-<div style="margin-top:-10px; margin-bottom:20px;">
-    <h4 style="color:#1f77b4;">🎯 60% & Above Throughout Academic Records</h4>
-    <p style="margin-top:-10px; color:gray;">
-        <i>(10th • 12th • Graduation)</i>
-    </p>
-</div>
-""", unsafe_allow_html=True)
-    
-
-    # Only admitted students
-    summary_df = df[
-        df["Final Status"].isin(
-            ["FULL FEE", "PARTIAL FEE", "WAITLIST FEE"]
-        )
-    ]
-
-    # Students having 60% or above in 10th, 12th and Graduation
-    eligible_df = summary_df[
-        (pd.to_numeric(summary_df["10th Percentage"], errors="coerce") >= 60) &
-        (pd.to_numeric(summary_df["12th Percentage"], errors="coerce") >= 60) &
-        (pd.to_numeric(summary_df["Graduation Percentage"], errors="coerce") >= 60)
-    ]
-
-    total_2024 = len(eligible_df[eligible_df["Batch"] == "2024-26"])
-    total_2025 = len(eligible_df[eligible_df["Batch"] == "2025-27"])
-    total_2026 = len(eligible_df[eligible_df["Batch"] == "2026-28"])
-
-    # KPI Cards
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.metric("🎓 2024-26", total_2024)
-
-    with col2:
-        st.metric("🎓 2025-27", total_2025)
-
-    with col3:
-        st.metric("🎓 2026-28", total_2026)
-
-    st.markdown("---")
-    st.subheader("📈 Total Admission Trend")
-
-    admission_chart = pd.DataFrame({
-        "Batch": ["2024-26", "2025-27", "2026-28"],
-        "Admissions": [admitted_2024, admitted_2025, admitted_2026]
-    })
-
-    fig = px.bar(
-        admission_chart,
-        x="Batch",
-        y="Admissions",
-        text="Admissions",
-        color="Batch"
-    )
-
-    fig.update_traces(textposition="outside")
-    fig.update_layout(height=450)
-
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("🎯 60% & Above Throughout Academic Records Trend")
-
-    eligible_chart = pd.DataFrame({
-        "Batch": ["2024-26", "2025-27", "2026-28"],
-        "Students": [total_2024, total_2025, total_2026]
-    })
-
-    fig = px.bar(
-        eligible_chart,
-        x="Batch",
-        y="Students",
-        text="Students",
-        color="Batch"
-    )
-
-    fig.update_traces(textposition="outside")
-    fig.update_layout(height=450)
-
-    st.plotly_chart(fig, use_container_width=True)
+    st.subheader("🏅 Programme-wise Admissions")
+    if prog_col and not filtered.empty:
+        ps = filtered.groupby(prog_col).size().reset_index(name="Students").sort_values("Students", ascending=False)
+        fig = px.bar(ps.head(12), x="Students", y=prog_col, orientation="h", text="Students", color="Students", color_continuous_scale="Blues")
+        fig.update_traces(textposition="outside", cliponaxis=False)
+        fig.update_layout(template="plotly_white", height=480, coloraxis_showscale=False, yaxis=dict(categoryorder="total ascending"))
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Selected filters ke liye data available nahi hai.")
 
 elif page == "👨 Gender":
 
     st.header("👨 Gender Analysis")
+    admitted_status=["FULL FEE","PARTIAL FEE","WAITLIST FEE"]
+    gender_df=df[df["Final Status"].isin(admitted_status)].copy()
+    gender_df["Gender"]=gender_df["Gender"].fillna("Not Available").astype(str).str.upper().replace({"M":"MALE","F":"FEMALE"})
 
-    gender_df = df[df["Final Status"].isin(["FULL FEE","PARTIAL FEE","WAITLIST FEE"])].copy()
-    gender_df["Gender"]=(gender_df["Gender"].astype(str).str.upper().replace({"M":"MALE","F":"FEMALE"}))
+    st.markdown("### 🎛️ Gender Filters")
+    f1,f2,f3=st.columns(3)
+    programme_col="Final Course Selected" if "Final Course Selected" in gender_df.columns else None
+    gprogrammes=sorted(gender_df[programme_col].dropna().astype(str).unique()) if programme_col else []
+    with f1: gbatch_filter=st.selectbox("Batch",["All Batches","2024-26","2025-27","2026-28"],key="gender_batch")
+    with f2: ggender_filter=st.selectbox("Gender",["All Genders"]+sorted(gender_df["Gender"].unique()),key="gender_gender")
+    with f3: gprogramme_filter=st.selectbox("Programme",["All Programmes"]+gprogrammes,key="gender_programme")
 
-    summary=(gender_df.groupby(["Batch","Gender"]).size().unstack(fill_value=0).reset_index())
-    if "MALE" not in summary.columns: summary["MALE"]=0
-    if "FEMALE" not in summary.columns: summary["FEMALE"]=0
-    summary["Total"]=summary["MALE"]+summary["FEMALE"]
+    gfiltered=gender_df.copy()
+    if gbatch_filter != "All Batches": gfiltered=gfiltered[gfiltered["Batch"]==gbatch_filter]
+    if ggender_filter != "All Genders": gfiltered=gfiltered[gfiltered["Gender"]==ggender_filter]
+    if programme_col and gprogramme_filter != "All Programmes": gfiltered=gfiltered[gfiltered[programme_col].astype(str)==gprogramme_filter]
 
-    st.subheader("📊 Gender Summary")
-    c1,c2,c3=st.columns(3)
-    for col,batch in zip([c1,c2,c3],["2024-26","2025-27","2026-28"]):
-        row=summary[summary["Batch"]==batch]
-        if not row.empty:
-            total=int(row["Total"].iloc[0]); male=int(row["MALE"].iloc[0]); female=int(row["FEMALE"].iloc[0])
-        else:
-            total=male=female=0
-        col.metric(batch,total,f"👨 {male} | 👩 {female}")
+    summary=(gfiltered.groupby(["Batch","Gender"]).size().unstack(fill_value=0)
+             .reindex(index=["2024-26","2025-27","2026-28"],fill_value=0))
+    for c in ["MALE","FEMALE"]:
+        if c not in summary.columns: summary[c]=0
+    summary=summary.reset_index()
+    summary["Total"]=summary[["MALE","FEMALE"]].sum(axis=1)
 
-        st.divider()
-    st.subheader("📈 Year Wise Gender Comparison")
+    a,b,c,d=st.columns(4)
+    a.metric("👨 Male",int(gfiltered["Gender"].eq("MALE").sum()))
+    b.metric("👩 Female",int(gfiltered["Gender"].eq("FEMALE").sum()))
+    c.metric("👥 Total",len(gfiltered))
+    top_batch=summary.loc[summary["Total"].idxmax(),"Batch"] if not summary.empty and summary["Total"].sum()>0 else "—"
+    d.metric("🏆 Best Batch",top_batch)
 
-    fig = go.Figure()
+    c1,c2=st.columns(2,gap="large")
+    with c1:
+        st.subheader("📊 Year-wise Gender Comparison")
+        long=summary.melt(id_vars="Batch",value_vars=["MALE","FEMALE"],var_name="Gender",value_name="Students")
+        fig=px.bar(long,x="Batch",y="Students",color="Gender",barmode="group",text="Students",color_discrete_map={"MALE":"#2563EB","FEMALE":"#EC4899"})
+        fig.update_traces(textposition="outside")
+        fig.update_layout(template="plotly_white",height=470)
+        st.plotly_chart(fig,use_container_width=True)
+    with c2:
+        st.subheader("🥧 Overall Gender Mix")
+        mix=gfiltered.groupby("Gender").size().reset_index(name="Students")
+        if not mix.empty:
+            fig=px.pie(mix,names="Gender",values="Students",hole=.58)
+            fig.update_traces(textinfo="percent+label")
+            fig.update_layout(template="plotly_white",height=470)
+            st.plotly_chart(fig,use_container_width=True)
 
-    fig.add_trace(go.Bar(
-        name="Male",
-        x=summary["Batch"],
-        y=summary["MALE"],
-        marker_color="#2563EB",
-        text=summary["MALE"],
-        textposition="outside"
-    ))
-
-    fig.add_trace(go.Bar(
-        name="Female",
-        x=summary["Batch"],
-        y=summary["FEMALE"],
-        marker_color="#EC4899",
-        text=summary["FEMALE"],
-        textposition="outside"
-    ))
-
-    fig.update_layout(
-        template="plotly_white",
-        height=550,
-        barmode="group",
-        title="Year Wise Gender Comparison",
-        title_x=0.5,
-        xaxis_title="Batch",
-        yaxis_title="Number of Students",
-        legend_title="Gender",
-        font=dict(size=18),
-        title_font=dict(size=24),
-        plot_bgcolor="white",
-        paper_bgcolor="white"
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
+    st.subheader("🎓 Gender Distribution by Programme")
+    if programme_col and not gfiltered.empty:
+        gp=gfiltered.groupby([programme_col,"Gender"]).size().reset_index(name="Students")
+        fig=px.bar(gp,x=programme_col,y="Students",color="Gender",barmode="stack",text="Students",color_discrete_map={"MALE":"#2563EB","FEMALE":"#EC4899"})
+        fig.update_layout(template="plotly_white",height=480,xaxis_tickangle=-25)
+        st.plotly_chart(fig,use_container_width=True)
 
 elif page == "🎓 Stream":
 
     st.header("🎓 Graduation Stream Analysis")
+    admitted_status=["FULL FEE","PARTIAL FEE","WAITLIST FEE"]
+    stream_df=df[df["Final Status"].isin(admitted_status)].copy()
+    stream_col="Graduation Stream"
+    stream_df[stream_col]=stream_df[stream_col].fillna("Not Available").astype(str).str.strip().replace("","Not Available")
 
-    stream_df = df[
-        df["Final Status"].isin(
-            ["FULL FEE", "PARTIAL FEE", "WAITLIST FEE"]
-        )
-    ].copy()
+    st.markdown("### 🎛️ Stream Filters")
+    f1,f2,f3=st.columns(3)
+    streams=sorted(stream_df[stream_col].unique())
+    programme_col="Final Course Selected" if "Final Course Selected" in stream_df.columns else None
+    sprogrammes=sorted(stream_df[programme_col].dropna().astype(str).unique()) if programme_col else []
+    with f1: sbatch_filter=st.selectbox("Batch",["All Batches","2024-26","2025-27","2026-28"],key="stream_batch")
+    with f2: stream_filter=st.selectbox("Graduation Stream",["All Streams"]+streams,key="stream_filter")
+    with f3: sprogramme_filter=st.selectbox("Programme",["All Programmes"]+sprogrammes,key="stream_programme")
 
-    stream_summary = (
-        stream_df.groupby(["Graduation Stream", "Batch"])
-        .size()
-        .unstack(fill_value=0)
-        .reset_index()
-    )
+    sfiltered=stream_df.copy()
+    if sbatch_filter != "All Batches": sfiltered=sfiltered[sfiltered["Batch"]==sbatch_filter]
+    if stream_filter != "All Streams": sfiltered=sfiltered[sfiltered[stream_col]==stream_filter]
+    if programme_col and sprogramme_filter != "All Programmes": sfiltered=sfiltered[sfiltered[programme_col].astype(str)==sprogramme_filter]
 
-    total_row = pd.DataFrame({
-        "Graduation Stream": ["Total"],
-        "2024-26": [stream_summary["2024-26"].sum()],
-        "2025-27": [stream_summary["2025-27"].sum()],
-        "2026-28": [stream_summary["2026-28"].sum()]
-    })
+    stream_summary=(sfiltered.groupby([stream_col,"Batch"]).size().unstack(fill_value=0)
+                    .reindex(columns=["2024-26","2025-27","2026-28"],fill_value=0).reset_index())
+    stream_summary["Total"]=stream_summary[["2024-26","2025-27","2026-28"]].sum(axis=1)
 
-    stream_summary = pd.concat([stream_summary, total_row], ignore_index=True)
+    k1,k2,k3,k4=st.columns(4)
+    k1.metric("👨‍🎓 Total Students",len(sfiltered))
+    k2.metric("🎓 Active Streams",sfiltered[stream_col].nunique())
+    top_stream=stream_summary.sort_values("Total",ascending=False).iloc[0][stream_col] if not stream_summary.empty else "—"
+    k3.metric("🏆 Top Stream",top_stream)
+    top_batch=sfiltered.groupby("Batch").size().idxmax() if not sfiltered.empty else "—"
+    k4.metric("📈 Best Batch",top_batch)
 
-    st.subheader("📋 Graduation Stream Summary")
-    st.dataframe(stream_summary, use_container_width=True)
+    c1,c2=st.columns([1.2,1],gap="large")
+    with c1:
+        st.subheader("📊 Stream-wise Comparison")
+        long=stream_summary.melt(id_vars=stream_col,value_vars=["2024-26","2025-27","2026-28"],var_name="Batch",value_name="Students")
+        fig=px.bar(long,x=stream_col,y="Students",color="Batch",barmode="group",text="Students")
+        fig.update_traces(textposition="outside")
+        fig.update_layout(template="plotly_white",height=500,xaxis_tickangle=-25)
+        st.plotly_chart(fig,use_container_width=True)
+    with c2:
+        st.subheader("🥧 Overall Stream Mix")
+        mix=sfiltered.groupby(stream_col).size().reset_index(name="Students").sort_values("Students",ascending=False).head(10)
+        if not mix.empty:
+            fig=px.pie(mix,names=stream_col,values="Students",hole=.55)
+            fig.update_layout(template="plotly_white",height=500)
+            st.plotly_chart(fig,use_container_width=True)
 
-    chart_source = stream_summary[
-        stream_summary["Graduation Stream"] != "Total"
-    ]
-
-    chart_df = chart_source.melt(
-        id_vars="Graduation Stream",
-        value_vars=["2024-26", "2025-27", "2026-28"],
-        var_name="Batch",
-        value_name="Students"
-    )
-
-    fig = px.bar(
-        chart_df,
-        x="Graduation Stream",
-        y="Students",
-        color="Batch",
-        barmode="group",
-        text="Students"
-    )
-
-    fig.update_traces(textposition="outside")
-    fig.update_layout(height=550)
-
-    st.plotly_chart(fig, use_container_width=True)
+    st.subheader("📋 Live Stream Summary")
+    st.dataframe(stream_summary.sort_values("Total",ascending=False),use_container_width=True,hide_index=True)
 
 elif page == "📝 Entrance Exam":
-    st.header("📝 Entrance Exam Analysis")
 
-    st.header("📍 State & City Analysis")
 
-    state_df = df[
-        df["Final Status"].isin(
-            ["FULL FEE", "PARTIAL FEE", "WAITLIST FEE"]
+    # =========================================================
+    # ENTRANCE EXAM ANALYSIS — EXACT IMAGE STYLE
+    # =========================================================
+    st.markdown("""
+    <style>
+    .entrance-page-title{font-size:30px!important;font-weight:800!important;color:#243447;margin:0 0 8px 0}
+    .batch-note{margin-top:25px;background:#EAF2FF;border-left:4px solid #2F80ED;border-radius:10px;padding:14px 18px;color:#31445A;font-size:15px!important;font-weight:600;min-height:52px;display:flex;align-items:center}
+    .kpi-card{background:#fff;border:1px solid #E5E7EB;border-radius:14px;padding:13px 16px;min-height:86px;box-shadow:0 2px 8px rgba(15,23,42,.06);display:flex;align-items:center;gap:13px}
+    .kpi-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:23px!important;flex-shrink:0}
+    .kpi-label{color:#64748B;font-size:13px!important;font-weight:700;line-height:1.1}
+    .kpi-value{color:#1E293B;font-size:26px!important;font-weight:850;line-height:1.2;margin-top:4px}
+    .section-heading{color:#26384B;font-size:20px!important;font-weight:800;margin:16px 0 10px 0}
+    .exam-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;width:100%;margin-top:8px}
+    .exam-box{background:#fff;border-radius:10px;overflow:hidden;border:1px solid #E2E8F0;box-shadow:0 2px 8px rgba(15,23,42,.05)}
+    .exam-name{color:#fff;text-align:center;font-size:17px!important;font-weight:800;padding:9px 8px;letter-spacing:.3px}
+    .score-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px!important}
+    .score-table th,.score-table td{border:1px solid #E2E8F0;padding:6px 3px;text-align:center;white-space:nowrap;font-size:11px!important;color:#334155}
+    .score-table th{background:#F8FAFC;font-weight:750;color:#475569}
+    .score-table .range-col{width:15%;text-align:left;padding-left:8px;white-space:normal}
+    .score-table .year-head{background:#F1F5F9;font-size:11px!important;font-weight:800}
+    .score-table .program-head{font-size:9px!important;padding:5px 1px}
+    .score-table .grand-row td{color:#fff!important;font-weight:800;padding-top:7px;padding-bottom:7px}
+    .score-table .grand-label{text-align:left!important;padding-left:8px!important}
+    @media(max-width:1100px){.exam-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    @media(max-width:700px){.exam-grid{grid-template-columns:1fr;}}
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="entrance-page-title">🎯 Entrance Exam Analysis</div>', unsafe_allow_html=True)
+
+    admitted_status=["FULL FEE","PARTIAL FEE","WAITLIST FEE"]
+    exam_df=df[df["Final Status"].isin(admitted_status)].copy()
+    # ============================================================
+    # ENTRANCE EXAM FINAL LOGIC
+    # EAS decides WHICH exam will be counted.
+    # Percentile decides WHICH RANGE/BAND it will go into.
+    #
+    # CAT block:        AQ / AR / AS  -> CAT Exam / Percentile CAT / EAS
+    # Other exam block: AT / AU / AV  -> Entrance Exam / Percentile score / EAS
+    #
+    # IMPORTANT: One student is counted in ONLY ONE exam.
+    # ============================================================
+    exam_df["Percentile CAT"] = pd.to_numeric(exam_df["Percentile CAT"], errors="coerce")
+    exam_df["Percentile score"] = pd.to_numeric(exam_df["Percentile score"], errors="coerce")
+    exam_df["Entrance Exam"] = exam_df["Entrance Exam"].fillna("").astype(str).str.upper().str.strip()
+    exam_df["Final Course Selected"] = exam_df["Final Course Selected"].fillna("").astype(str).str.upper().str.strip()
+
+    # Safely identify EAS columns by their position immediately after
+    # the corresponding percentile columns. This works even when Google
+    # Sheets has duplicate header names such as EAS and EAS.1.
+    cat_eas_col = None
+    other_eas_col = None
+
+    try:
+        cat_pct_pos = exam_df.columns.get_loc("Percentile CAT")
+        if isinstance(cat_pct_pos, slice):
+            cat_pct_pos = cat_pct_pos.start
+        if isinstance(cat_pct_pos, int) and cat_pct_pos + 1 < len(exam_df.columns):
+            cat_eas_col = exam_df.columns[cat_pct_pos + 1]
+    except Exception:
+        pass
+
+    try:
+        other_pct_pos = exam_df.columns.get_loc("Percentile score")
+        if isinstance(other_pct_pos, slice):
+            other_pct_pos = other_pct_pos.start
+        if isinstance(other_pct_pos, int) and other_pct_pos + 1 < len(exam_df.columns):
+            other_eas_col = exam_df.columns[other_pct_pos + 1]
+    except Exception:
+        pass
+
+    # Additional fallback if the sheet structure changes.
+    eas_like_cols = [c for c in exam_df.columns if str(c).strip().upper().startswith("EAS")]
+    if cat_eas_col is None and len(eas_like_cols) >= 1:
+        cat_eas_col = eas_like_cols[0]
+    if other_eas_col is None and len(eas_like_cols) >= 2:
+        other_eas_col = eas_like_cols[1]
+
+    exam_df["_CAT_EAS"] = (
+        pd.to_numeric(exam_df[cat_eas_col], errors="coerce")
+        if cat_eas_col in exam_df.columns else pd.Series(float("nan"), index=exam_df.index)
+    )
+    exam_df["_OTHER_EAS"] = (
+        pd.to_numeric(exam_df[other_eas_col], errors="coerce")
+        if other_eas_col in exam_df.columns else pd.Series(float("nan"), index=exam_df.index)
+    )
+
+    # Final selected exam and its percentile.
+    exam_df["_Winning_Exam"] = ""
+    exam_df["_Winning_Percentile"] = float("nan")
+
+    valid_other_exam = exam_df["Entrance Exam"].isin(["CMAT", "MAT", "XAT", "ATMA", "GMAT"])
+
+    cat_ready = exam_df["_CAT_EAS"].notna() & exam_df["Percentile CAT"].notna()
+    other_ready = (
+        valid_other_exam
+        & exam_df["_OTHER_EAS"].notna()
+        & exam_df["Percentile score"].notna()
+    )
+
+    # Highest EAS wins. In an exact tie, CAT gets priority so there is
+    # still no double counting.
+    cat_wins = cat_ready & (~other_ready | (exam_df["_CAT_EAS"] >= exam_df["_OTHER_EAS"]))
+    other_wins = other_ready & (~cat_ready | (exam_df["_OTHER_EAS"] > exam_df["_CAT_EAS"]))
+
+    exam_df.loc[cat_wins, "_Winning_Exam"] = "CAT"
+    exam_df.loc[cat_wins, "_Winning_Percentile"] = exam_df.loc[cat_wins, "Percentile CAT"]
+
+    exam_df.loc[other_wins, "_Winning_Exam"] = exam_df.loc[other_wins, "Entrance Exam"]
+    exam_df.loc[other_wins, "_Winning_Percentile"] = exam_df.loc[other_wins, "Percentile score"]
+
+    # Safety fallback: if EAS is blank but only one exam has a valid percentile,
+    # keep that student's available exam data instead of dropping the record.
+    unresolved = exam_df["_Winning_Exam"].eq("")
+    only_cat = unresolved & exam_df["Percentile CAT"].notna() & ~valid_other_exam
+    exam_df.loc[only_cat, "_Winning_Exam"] = "CAT"
+    exam_df.loc[only_cat, "_Winning_Percentile"] = exam_df.loc[only_cat, "Percentile CAT"]
+
+    unresolved = exam_df["_Winning_Exam"].eq("")
+    only_other = unresolved & valid_other_exam & exam_df["Percentile score"].notna() & exam_df["Percentile CAT"].isna()
+    exam_df.loc[only_other, "_Winning_Exam"] = exam_df.loc[only_other, "Entrance Exam"]
+    exam_df.loc[only_other, "_Winning_Percentile"] = exam_df.loc[only_other, "Percentile score"]
+
+    batch_order=["2024-26","2025-27","2026-28"]
+    exam_list=["CAT","CMAT","MAT","XAT","ATMA","GMAT"]
+
+    # TOP ROW — SELECT BATCH + NOTE (exact reference layout)
+    filter_col,note_col=st.columns([1.05,2.95],gap="small")
+    with filter_col:
+        selected_batch=st.selectbox("Select Batch",["All Batches"]+batch_order,key="entrance_batch_filter_exact")
+    with note_col:
+        st.markdown('<div class="batch-note">ℹ️ &nbsp; Note: PGDM-SM is not available for the 2026-28 batch.</div>',unsafe_allow_html=True)
+
+    display_df=exam_df.copy() if selected_batch=="All Batches" else exam_df[exam_df["Batch"]==selected_batch].copy()
+
+    def get_exam_data(source_df, exam):
+        # EAS has already selected the winning exam.
+        # The winning exam's PERCENTILE is used for all table ranges.
+        result = source_df[
+            (source_df["_Winning_Exam"] == exam)
+            & (pd.to_numeric(source_df["_Winning_Percentile"], errors="coerce").notna())
+        ].copy()
+
+        result["_Winning_Percentile"] = pd.to_numeric(
+            result["_Winning_Percentile"], errors="coerce"
         )
-    ].copy()
+        return result, "_Winning_Percentile"
 
-    state_summary = (
-        state_df.groupby(["Correspondence State", "Batch"])
-        .size()
-        .unstack(fill_value=0)
-        .reset_index()
-    )
+    def programmes_for(batch):
+        return ["PGDM-N","PGDM-M"] if batch=="2026-28" else ["PGDM-N","PGDM-M","PGDM-SM"]
 
-    total_row = pd.DataFrame({
-        "Correspondence State": ["Total"],
-        "2024-26": [state_summary["2024-26"].sum()],
-        "2025-27": [state_summary["2025-27"].sum()],
-        "2026-28": [state_summary["2026-28"].sum()]
-    })
+    # KPI CARDS
+    counts={}
+    for exam in exam_list:
+        t,c=get_exam_data(display_df,exam)
+        counts[exam]=int(t[c].notna().sum())
+    total_students=sum(counts.values())
 
-    state_summary = pd.concat(
-        [state_summary, total_row],
-        ignore_index=True
-    )
+    cards=[
+        ("👤","Total Students",total_students,"#F0EAFE"),("📖","CAT",counts["CAT"],"#EAF2FF"),
+        ("🟩","CMAT",counts["CMAT"],"#EAF8F2"),("📘","MAT",counts["MAT"],"#F4EAFE"),
+        ("👥","XAT",counts["XAT"],"#FDEEEE"),("🔶","ATMA",counts["ATMA"],"#FFF3E3"),
+        ("📄","GMAT",counts["GMAT"],"#EAF8F6")]
+    kcols=st.columns(7,gap="small")
+    for col,(icon,label,value,bg) in zip(kcols,cards):
+        with col:
+            st.markdown(f'<div class="kpi-card"><div class="kpi-icon" style="background:{bg};">{icon}</div><div><div class="kpi-label">{label}</div><div class="kpi-value">{value:,}</div></div></div>',unsafe_allow_html=True)
 
-    st.header("📍 State & City Analysis")
+    # MODERN GRAPH — directly below cards (no summary table, exactly like image)
+    graph_title="📊 Entrance Exam Wise Student Comparison (Year Wise)" if selected_batch=="All Batches" else f"📊 Entrance Exam Wise Student Comparison ({selected_batch})"
+    st.markdown(f'<div class="section-heading">{graph_title}</div>',unsafe_allow_html=True)
 
-    # Admitted Students
-    state_df = df[
-        df["Final Status"].isin(
-            ["FULL FEE", "PARTIAL FEE", "WAITLIST FEE"]
-        )
-    ].copy()
+    if selected_batch=="All Batches":
+        rows=[]
+        for exam in exam_list:
+            t,_=get_exam_data(display_df,exam)
+            for batch in batch_order:
+                rows.append({"Entrance Exam":exam,"Batch":batch,"Students":int((t["Batch"]==batch).sum())})
+        graph_df=pd.DataFrame(rows)
+        fig=px.bar(graph_df,x="Entrance Exam",y="Students",color="Batch",barmode="group",text="Students",category_orders={"Entrance Exam":exam_list,"Batch":batch_order},color_discrete_map={"2024-26":"#2457B2","2025-27":"#169B62","2026-28":"#F21D2F"})
+    else:
+        rows=[]
+        for exam in exam_list:
+            t,_=get_exam_data(display_df,exam); rows.append({"Entrance Exam":exam,"Students":len(t)})
+        graph_df=pd.DataFrame(rows)
+        fig=px.bar(graph_df,x="Entrance Exam",y="Students",color="Entrance Exam",text="Students",category_orders={"Entrance Exam":exam_list},color_discrete_map={"CAT":"#1D3F91","CMAT":"#0E6B2D","MAT":"#563B78","XAT":"#E31C23","ATMA":"#E87400","GMAT":"#148C8C"})
+    fig.update_traces(textposition="outside",cliponaxis=False,marker_line_width=0)
+    fig.update_layout(template="plotly_white",height=350,margin=dict(l=35,r=20,t=15,b=35),plot_bgcolor="white",paper_bgcolor="white",hovermode="x unified",legend_title_text="Batch" if selected_batch=="All Batches" else "",font=dict(size=12,color="#334155"),xaxis_title="Entrance Exam",yaxis_title="Students",showlegend=(selected_batch=="All Batches"))
+    fig.update_xaxes(showgrid=False)
+    fig.update_yaxes(showgrid=True,gridcolor="#E8EDF3",zeroline=False)
+    st.plotly_chart(fig,use_container_width=True)
 
-    # State Summary
-    state_summary = (
-        state_df.groupby(["Correspondence State", "Batch"])
-        .size()
-        .unstack(fill_value=0)
-        .reset_index()
-    )
+    # PROGRAMME-WISE SCORE RANGE SUMMARY
+    section_title="🎯 Programme Wise Score Range Summary (Year Wise)" if selected_batch=="All Batches" else f"🎯 Programme Wise Score Range Summary ({selected_batch})"
+    st.markdown(f'<div class="section-heading">{section_title}</div>',unsafe_allow_html=True)
 
-    # Ensure all batch columns exist
-    for col in ["2024-26", "2025-27", "2026-28"]:
-        if col not in state_summary.columns:
-            state_summary[col] = 0
+    score_ranges=[("90 & Above",90,float("inf")),("80–89.99",80,89.999999),("70–79.99",70,79.999999),("60–69.99",60,69.999999),("50–59.99",50,59.999999),("40–49.99",40,49.999999)]
+    exam_colors={"CAT":"#173A8A","CMAT":"#075D1D","MAT":"#4D2A70","XAT":"#E51B23","ATMA":"#E87000","GMAT":"#148B8B"}
 
-    # Total Row
-    total_row = pd.DataFrame({
-        "Correspondence State": ["Total"],
-        "2024-26": [state_summary["2024-26"].sum()],
-        "2025-27": [state_summary["2025-27"].sum()],
-        "2026-28": [state_summary["2026-28"].sum()]
-    })
+    def build_exam_table(exam,source_df,score_col):
+        color=exam_colors[exam]
+        html=f'<div class="exam-box"><div class="exam-name" style="background:{color};">{exam}</div><table class="score-table"><thead>'
+        if selected_batch=="All Batches":
+            html+='<tr><th class="range-col" rowspan="2">Score Range /<br>Criteria</th>'
+            for batch in batch_order:
+                html+=f'<th class="year-head" colspan="{len(programmes_for(batch))}">{batch}</th>'
+            html+='<th rowspan="2">Total</th></tr><tr>'
+            for batch in batch_order:
+                for programme in programmes_for(batch): html+=f'<th class="program-head">{programme}</th>'
+            html+='</tr>'
+        else:
+            ps=programmes_for(selected_batch)
+            html+='<tr><th class="range-col">Score Range /<br>Criteria</th>'+''.join(f'<th>{p}</th>' for p in ps)+'<th>Total</th></tr>'
+        html+='</thead><tbody>'
+        totals={}
+        for label,low,high in score_ranges:
+            ranged=source_df[source_df[score_col].notna()&(source_df[score_col]>=low)&(source_df[score_col]<=high)]
+            html+=f'<tr><td class="range-col">{label}</td>'
+            if selected_batch=="All Batches":
+                for batch in batch_order:
+                    bd=ranged[ranged["Batch"]==batch]
+                    for p in programmes_for(batch):
+                        v=int((bd["Final Course Selected"]==p).sum()); totals[f"{batch}|{p}"]=totals.get(f"{batch}|{p}",0)+v; html+=f'<td>{v}</td>'
+            else:
+                for p in programmes_for(selected_batch):
+                    v=int((ranged["Final Course Selected"]==p).sum()); totals[p]=totals.get(p,0)+v; html+=f'<td>{v}</td>'
+            rt=int(len(ranged)); totals["Total"]=totals.get("Total",0)+rt; html+=f'<td>{rt}</td></tr>'
+        html+=f'<tr class="grand-row" style="background:{color};"><td class="grand-label">Grand Total</td>'
+        if selected_batch=="All Batches":
+            for batch in batch_order:
+                for p in programmes_for(batch): html+=f'<td>{totals.get(f"{batch}|{p}",0)}</td>'
+        else:
+            for p in programmes_for(selected_batch): html+=f'<td>{totals.get(p,0)}</td>'
+        html+=f'<td>{totals.get("Total",0)}</td></tr></tbody></table></div>'
+        return html
 
-    state_summary = pd.concat(
-        [state_summary, total_row],
-        ignore_index=True
-    )
+    # EXACT IMAGE ARRANGEMENT: 3 + 3
+    table_html='<div class="exam-grid">'
+    for exam in exam_list:
+        ed,sc=get_exam_data(display_df,exam)
+        table_html+=build_exam_table(exam,ed,sc)
+    table_html+='</div>'
+    st.markdown(table_html,unsafe_allow_html=True)
+
 
 elif page == "📍 State & City":
 
     st.header("📍 State & City Analysis")
+    admitted_status=["FULL FEE","PARTIAL FEE","WAITLIST FEE"]
+    state_df=df[df["Final Status"].isin(admitted_status)].copy()
+    state_col="Correspondence State"
+    city_col="Correspondence city"
+    state_df[state_col]=state_df[state_col].fillna("Not Available").astype(str).str.strip().replace("","Not Available")
+    state_df[city_col]=state_df[city_col].fillna("Not Available").astype(str).str.strip().replace("","Not Available")
 
-    state_df = df[
-        df["Final Status"].isin(
-            ["FULL FEE", "PARTIAL FEE", "WAITLIST FEE"]
-        )
-    ].copy()
+    st.markdown("### 🎛️ Geographic Filters")
+    f1,f2,f3=st.columns(3)
+    states=sorted(state_df[state_col].unique())
+    cities=sorted(state_df[city_col].unique())
+    with f1: cbatch_filter=st.selectbox("Batch",["All Batches","2024-26","2025-27","2026-28"],key="geo_batch")
+    with f2: state_filter_geo=st.selectbox("State",["All States"]+states,key="geo_state")
+    with f3: city_filter_geo=st.selectbox("City",["All Cities"]+cities,key="geo_city")
 
-    state_summary = (
-        state_df.groupby(["Correspondence State", "Batch"])
-        .size()
-        .unstack(fill_value=0)
-        .reset_index()
-    )
+    geo=state_df.copy()
+    if cbatch_filter != "All Batches": geo=geo[geo["Batch"]==cbatch_filter]
+    if state_filter_geo != "All States": geo=geo[geo[state_col]==state_filter_geo]
+    if city_filter_geo != "All Cities": geo=geo[geo[city_col]==city_filter_geo]
 
-    for col in ["2024-26", "2025-27", "2026-28"]:
-        if col not in state_summary.columns:
-            state_summary[col] = 0
-    
-    total_row = pd.DataFrame({
-        "Correspondence State": ["Total"],
-        "2024-26": [state_summary["2024-26"].sum()],
-        "2025-27": [state_summary["2025-27"].sum()],
-        "2026-28": [state_summary["2026-28"].sum()],
-    })
-    state_summary = pd.concat(
-        [state_summary, total_row],
-        ignore_index=True
-    )
+    state_total=geo.groupby(state_col).size().sort_values(ascending=False)
+    city_total=geo.groupby(city_col).size().sort_values(ascending=False)
+    k1,k2,k3,k4=st.columns(4)
+    k1.metric("👨‍🎓 Total Students",len(geo))
+    k2.metric("📍 States Covered",geo[state_col].nunique())
+    k3.metric("🏙️ Cities Covered",geo[city_col].nunique())
+    k4.metric("🏆 Top State",state_total.index[0] if not state_total.empty else "—")
 
-    st.subheader("📍 State Summary")
-    st.dataframe(state_summary, use_container_width=True)
+    c1,c2=st.columns(2,gap="large")
+    with c1:
+        st.subheader("📊 Top States")
+        ss=state_total.head(12).sort_values().reset_index(name="Students")
+        if not ss.empty:
+            fig=px.bar(ss,x="Students",y=state_col,orientation="h",text="Students",color="Students",color_continuous_scale="Teal")
+            fig.update_traces(textposition="outside",cliponaxis=False)
+            fig.update_layout(template="plotly_white",height=500,coloraxis_showscale=False)
+            st.plotly_chart(fig,use_container_width=True)
+    with c2:
+        st.subheader("🏙️ Top Cities")
+        cs=city_total.head(12).sort_values().reset_index(name="Students")
+        if not cs.empty:
+            fig=px.bar(cs,x="Students",y=city_col,orientation="h",text="Students",color="Students",color_continuous_scale="Blues")
+            fig.update_traces(textposition="outside",cliponaxis=False)
+            fig.update_layout(template="plotly_white",height=500,coloraxis_showscale=False)
+            st.plotly_chart(fig,use_container_width=True)
 
-    graph_df = state_summary[
-        state_summary["Correspondence State"] != "Total"
-    ]
+    st.subheader("📈 State-wise Admission Comparison")
+    state_year=geo.groupby([state_col,"Batch"]).size().reset_index(name="Students")
+    if not state_year.empty:
+        top_states=state_total.head(15).index
+        state_year=state_year[state_year[state_col].isin(top_states)]
+        fig=px.bar(state_year,x=state_col,y="Students",color="Batch",barmode="group",text="Students",category_orders={"Batch":["2024-26","2025-27","2026-28"]})
+        fig.update_layout(template="plotly_white",height=600,xaxis_tickangle=-35)
+        st.plotly_chart(fig,use_container_width=True)
 
-    chart_df = graph_df.melt(
-        id_vars="Correspondence State",
-        value_vars=["2024-26", "2025-27", "2026-28"],
-        var_name="Batch",
-        value_name="Students"
-    )
+    st.subheader("📋 State & City Summary")
+    tab1,tab2=st.tabs(["📍 State Summary","🏙️ City Summary"])
+    with tab1:
+        state_summary=geo.groupby([state_col,"Batch"]).size().unstack(fill_value=0).reindex(columns=["2024-26","2025-27","2026-28"],fill_value=0)
+        state_summary["Total"]=state_summary.sum(axis=1)
+        st.dataframe(state_summary.sort_values("Total",ascending=False),use_container_width=True)
+    with tab2:
+        city_summary=geo.groupby([city_col,"Batch"]).size().unstack(fill_value=0).reindex(columns=["2024-26","2025-27","2026-28"],fill_value=0)
+        city_summary["Total"]=city_summary.sum(axis=1)
+        st.dataframe(city_summary.sort_values("Total",ascending=False),use_container_width=True)
 
-    st.subheader("📊 State Wise Comparison")
-
-    fig = px.bar(
-        chart_df,
-        x="Correspondence State",
-        y="Students",
-        color="Batch",
-        barmode="group",
-        text="Students"
-    )
-
-    fig.update_traces(textposition="outside")
-
-    fig.update_layout(
-        height=650,
-        xaxis_title="State",
-        yaxis_title="Students"
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
-    city_summary = (
-        state_df.groupby(["Correspondence city", "Batch"])
-        .size()
-        .unstack(fill_value=0)
-        .reset_index()
-    )
-
-    for col in ["2024-26", "2025-27", "2026-28"]:
-        if col not in city_summary.columns:
-            city_summary[col] = 0
-
-    total_row = pd.DataFrame({
-        "Correspondence city": ["Total"],
-        "2024-26": [city_summary["2024-26"].sum()],
-        "2025-27": [city_summary["2025-27"].sum()],
-        "2026-28": [city_summary["2026-28"].sum()]
-    })
-
-    city_summary = pd.concat(
-        [city_summary, total_row],
-        ignore_index=True
-    )
-
-    st.dataframe(city_summary, use_container_width=True)
-    # ==========================
-    # Top 15 Cities Graph
-    # ==========================
-
-    chart_city = city_summary[city_summary["Correspondence city"] != "Total"].copy()
-
-    # Overall Total
-    chart_city["Total"] = (
-        chart_city["2024-26"] +
-        chart_city["2025-27"] +
-        chart_city["2026-28"]
-    )
-
-    # Top 15 Cities
-    top15_city = chart_city.sort_values(
-        by="Total",
-        ascending=False
-    ).head(15)
-
-    fig = px.bar(
-        top15_city,
-        x="Correspondence city",
-        y=["2024-26", "2025-27", "2026-28"],
-        barmode="group",
-        text_auto=True,
-        title="🏙️ Top 15 Cities - Admission Comparison"
-    )
-
-    fig.update_traces(textposition="outside")
-
-    fig.update_layout(
-        height=650,
-        xaxis_title="City",
-        yaxis_title="Students",
-        xaxis_tickangle=-45,
-        legend_title="Batch"
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
 elif page == "👤 Owner Analysis":
-    st.header("👤 Owner Analysis")
 
-elif page == "🏢 Campus Analysis":
-    st.header("🏢 Campus Analysis")
+
+    # =========================================================
+    # OWNER ANALYSIS — LIVE MANAGEMENT DASHBOARD
+    # =========================================================
+
+    st.markdown("""
+    <style>
+    .owner-title{font-size:32px!important;font-weight:850!important;color:#243447;margin:0 0 4px 0}
+    .owner-subtitle{color:#64748B;font-size:15px!important;margin-bottom:16px}
+    .filter-panel{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:14px;padding:14px 16px 6px 16px;margin:8px 0 14px 0}
+    .owner-card{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;padding:15px 17px;min-height:105px;box-shadow:0 3px 12px rgba(15,23,42,.06)}
+    .owner-card-label{color:#64748B;font-size:13px!important;font-weight:750}
+    .owner-card-value{color:#1E293B;font-size:28px!important;font-weight:850;margin-top:7px;line-height:1.05}
+    .owner-card-note{color:#94A3B8;font-size:11px!important;margin-top:6px}
+    .owner-section{color:#26384B;font-size:20px!important;font-weight:850;margin:22px 0 10px 0}
+    .insight-good,.insight-watch{border-radius:12px;padding:13px 16px;margin:7px 0;font-size:14px!important;font-weight:600}
+    .insight-good{background:#ECFDF5;border-left:4px solid #10B981;color:#065F46}
+    .insight-watch{background:#FFF7ED;border-left:4px solid #F97316;color:#9A3412}
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="owner-title">👑 Owner Analysis</div>', unsafe_allow_html=True)
+    st.markdown('<div class="owner-subtitle">Live management view with individual Owner-wise performance and smart filters</div>', unsafe_allow_html=True)
+
+    admitted_status = ["FULL FEE", "PARTIAL FEE", "WAITLIST FEE"]
+    owner_df = df[df["Final Status"].isin(admitted_status)].copy()
+
+    def _norm_col(x):
+        return "".join(ch.lower() for ch in str(x) if ch.isalnum())
+
+    def find_matching_column(columns, candidates):
+        lookup = {_norm_col(c): c for c in columns}
+        for candidate in candidates:
+            if _norm_col(candidate) in lookup:
+                return lookup[_norm_col(candidate)]
+        for candidate in candidates:
+            key = _norm_col(candidate)
+            for norm, original in lookup.items():
+                if key in norm or norm in key:
+                    return original
+        return None
+
+    owner_col = find_matching_column(owner_df.columns, [
+        "Owner Name", "Owner", "Counsellor Name", "Counselor Name",
+        "Admission Owner", "Sales Owner", "Assigned To",
+        "Relationship Manager", "RM Name", "Executive Name"
+    ])
+
+    programme_col = "Final Course Selected" if "Final Course Selected" in owner_df.columns else None
+    gender_col = "Gender" if "Gender" in owner_df.columns else None
+    stream_col = "Graduation Stream" if "Graduation Stream" in owner_df.columns else None
+    state_col = "Correspondence State" if "Correspondence State" in owner_df.columns else None
+    city_col = "Correspondence city" if "Correspondence city" in owner_df.columns else None
+
+    for col in [programme_col, stream_col, state_col, city_col]:
+        if col:
+            owner_df[col] = owner_df[col].fillna("Not Available").astype(str).str.strip()
+
+    if gender_col:
+        owner_df[gender_col] = owner_df[gender_col].fillna("Not Available").astype(str).str.upper().str.strip().replace({"M":"MALE","F":"FEMALE"})
+
+    owner_found = owner_col is not None
+    if owner_found:
+        owner_df[owner_col] = owner_df[owner_col].fillna("Unassigned").astype(str).str.strip()
+    else:
+        owner_df["_Owner_Display"] = "Owner column not found"
+        owner_col = "_Owner_Display"
+
+    st.markdown('<div class="filter-panel">', unsafe_allow_html=True)
+    f1, f2, f3, f4, f5, f6 = st.columns(6)
+
+    with f1:
+        batch_filter = st.selectbox("📅 Batch", ["All Batches","2024-26","2025-27","2026-28"], key="owner_batch_filter")
+    with f2:
+        opts = ["All Programmes"] + sorted(owner_df[programme_col].dropna().unique().tolist()) if programme_col else ["All Programmes"]
+        programme_filter = st.selectbox("🎓 Programme", opts, key="owner_programme_filter")
+    with f3:
+        opts = ["All Owners"] + sorted(owner_df[owner_col].dropna().unique().tolist())
+        owner_filter = st.selectbox("👤 Owner Name", opts, key="owner_name_filter")
+    with f4:
+        opts = ["All Genders"] + sorted(owner_df[gender_col].dropna().unique().tolist()) if gender_col else ["All Genders"]
+        gender_filter = st.selectbox("👥 Gender", opts, key="owner_gender_filter")
+    with f5:
+        opts = ["All Streams"] + sorted(owner_df[stream_col].dropna().unique().tolist()) if stream_col else ["All Streams"]
+        stream_filter = st.selectbox("📚 Stream", opts, key="owner_stream_filter")
+    with f6:
+        opts = ["All States"] + sorted(owner_df[state_col].dropna().unique().tolist()) if state_col else ["All States"]
+        state_filter = st.selectbox("📍 State", opts, key="owner_state_filter")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if not owner_found:
+        st.warning("⚠️ Owner Name column automatically detect nahi hua. Google Sheet me actual Owner column ka naam confirm hote hi individual Owner filter live data show karega.")
+
+    filtered = owner_df.copy()
+    if batch_filter != "All Batches":
+        filtered = filtered[filtered["Batch"] == batch_filter]
+    if programme_col and programme_filter != "All Programmes":
+        filtered = filtered[filtered[programme_col] == programme_filter]
+    if owner_filter != "All Owners":
+        filtered = filtered[filtered[owner_col] == owner_filter]
+    if gender_col and gender_filter != "All Genders":
+        filtered = filtered[filtered[gender_col] == gender_filter]
+    if stream_col and stream_filter != "All Streams":
+        filtered = filtered[filtered[stream_col] == stream_filter]
+    if state_col and state_filter != "All States":
+        filtered = filtered[filtered[state_col] == state_filter]
+
+    total_students = len(filtered)
+    batch_counts = filtered.groupby("Batch").size().reindex(["2024-26","2025-27","2026-28"], fill_value=0)
+    best_batch = batch_counts.idxmax() if batch_counts.max() > 0 else "—"
+    top_programme = filtered[programme_col].value_counts().idxmax() if programme_col and not filtered.empty else "—"
+    top_state = filtered[state_col].value_counts().idxmax() if state_col and not filtered.empty else "—"
+
+    if owner_found and not filtered.empty:
+        owner_value = filtered[owner_col].replace("Unassigned", pd.NA).nunique() if owner_filter == "All Owners" else total_students
+        owner_label = "Active Owners" if owner_filter == "All Owners" else "Selected Owner Students"
+    else:
+        owner_value, owner_label = "—", "Owner Performance"
+
+    k1,k2,k3,k4,k5 = st.columns(5)
+    cards = [
+        (k1,"👥 Total Admissions",f"{total_students:,}","Current filtered data"),
+        (k2,f"👤 {owner_label}",str(owner_value),"Live Owner-wise view"),
+        (k3,"🏆 Best Batch",best_batch,"Highest admissions"),
+        (k4,"🎓 Top Programme",top_programme,"Most selected programme"),
+        (k5,"📍 Top State",top_state,"Highest contribution")
+    ]
+    for col,label,value,note in cards:
+        with col:
+            st.markdown(f'<div class="owner-card"><div class="owner-card-label">{label}</div><div class="owner-card-value" style="font-size:{"21px" if len(str(value))>12 else "28px"}!important;">{value}</div><div class="owner-card-note">{note}</div></div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="owner-section">📈 Year-wise Admission Performance</div>', unsafe_allow_html=True)
+    year_summary = batch_counts.reset_index()
+    year_summary.columns = ["Batch","Students"]
+    fig = px.bar(year_summary, x="Batch", y="Students", text="Students", color="Batch",
+                 category_orders={"Batch":["2024-26","2025-27","2026-28"]},
+                 color_discrete_map={"2024-26":"#2457B2","2025-27":"#169B62","2026-28":"#F21D2F"})
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    fig.update_layout(template="plotly_white",height=390,margin=dict(l=35,r=20,t=20,b=30),showlegend=False,
+                      plot_bgcolor="white",paper_bgcolor="white",xaxis_title="Batch",yaxis_title="Admissions")
+    fig.update_xaxes(showgrid=False)
+    fig.update_yaxes(showgrid=True,gridcolor="#E8EDF3",zeroline=False)
+    st.plotly_chart(fig,use_container_width=True)
+
+    c1,c2 = st.columns(2,gap="large")
+
+    with c1:
+        st.markdown('<div class="owner-section">👤 Owner-wise Performance</div>', unsafe_allow_html=True)
+        if owner_found and not filtered.empty:
+            os = (filtered[filtered[owner_col]!="Unassigned"].groupby(owner_col).size()
+                  .reset_index(name="Students").sort_values("Students",ascending=False).head(15))
+            if not os.empty:
+                fig = px.bar(os.sort_values("Students"),x="Students",y=owner_col,orientation="h",text="Students",
+                             color="Students",color_continuous_scale="Blues")
+                fig.update_traces(textposition="outside",cliponaxis=False)
+                fig.update_layout(template="plotly_white",height=470,margin=dict(l=20,r=30,t=15,b=20),
+                                  coloraxis_showscale=False,xaxis_title="Students",yaxis_title="")
+                st.plotly_chart(fig,use_container_width=True)
+            else:
+                st.info("Selected filters ke liye Owner-wise data available nahi hai.")
+        else:
+            st.info("Owner column detect hote hi yahan Top Owners ka live comparison show hoga.")
+
+    with c2:
+        st.markdown('<div class="owner-section">🎓 Programme Performance</div>', unsafe_allow_html=True)
+        if programme_col and not filtered.empty:
+            ps = filtered.groupby([programme_col,"Batch"]).size().reset_index(name="Students")
+            fig = px.bar(ps,x=programme_col,y="Students",color="Batch",barmode="group",text="Students",
+                         category_orders={"Batch":["2024-26","2025-27","2026-28"]},
+                         color_discrete_map={"2024-26":"#2457B2","2025-27":"#169B62","2026-28":"#F21D2F"})
+            fig.update_traces(textposition="outside",cliponaxis=False)
+            fig.update_layout(template="plotly_white",height=470,margin=dict(l=20,r=20,t=15,b=60),
+                              legend_title="Batch",xaxis_title="Programme",yaxis_title="Students")
+            fig.update_xaxes(showgrid=False)
+            fig.update_yaxes(showgrid=True,gridcolor="#E8EDF3")
+            st.plotly_chart(fig,use_container_width=True)
+        else:
+            st.info("Selected filters ke liye Programme data available nahi hai.")
+
+    # =========================================================
+    # REFERENCE LAYOUT: STUDENT QUALITY + STREAM + ENTRANCE
+    # =========================================================
+    quality = filtered.copy()
+    academic_cols = ["10th Percentage", "12th Percentage", "Graduation Percentage"]
+    for col in academic_cols:
+        if col in quality.columns:
+            quality[col] = pd.to_numeric(quality[col], errors="coerce")
+
+    # Students scoring 60% or above in 10th, 12th and Graduation
+    quality_available = all(col in quality.columns for col in academic_cols)
+    if quality_available:
+        all60 = int(((quality["10th Percentage"] >= 60) &
+                     (quality["12th Percentage"] >= 60) &
+                     (quality["Graduation Percentage"] >= 60)).sum())
+    else:
+        all60 = 0
+
+    r1, r2, r3 = st.columns([1.05, 1.0, 1.25], gap="small")
+
+    with r1:
+        st.markdown('<div class="owner-section">🏆 Student Quality Index (Average %)</div>', unsafe_allow_html=True)
+        rows=[]
+        for batch in ["2024-26", "2025-27", "2026-28"]:
+            bq=quality[quality["Batch"]==batch]
+            rows.append({
+                "Batch":batch,
+                "10th %":round(bq["10th Percentage"].mean(),2) if "10th Percentage" in bq.columns else 0,
+                "12th %":round(bq["12th Percentage"].mean(),2) if "12th Percentage" in bq.columns else 0,
+                "Graduation %":round(bq["Graduation Percentage"].mean(),2) if "Graduation Percentage" in bq.columns else 0
+            })
+        if batch_filter == "All Batches":
+            rows.append({
+                "Batch":"All Batches",
+                "10th %":round(quality["10th Percentage"].mean(),2) if "10th Percentage" in quality.columns else 0,
+                "12th %":round(quality["12th Percentage"].mean(),2) if "12th Percentage" in quality.columns else 0,
+                "Graduation %":round(quality["Graduation Percentage"].mean(),2) if "Graduation Percentage" in quality.columns else 0
+            })
+        quality_table=pd.DataFrame(rows)
+        if batch_filter != "All Batches":
+            quality_table=quality_table[quality_table["Batch"]==batch_filter]
+        st.dataframe(
+            quality_table.style.format({"10th %":"{:.2f}","12th %":"{:.2f}","Graduation %":"{:.2f}"}),
+            use_container_width=True, hide_index=True
+        )
+
+    with r2:
+        st.markdown('<div class="owner-section">🎓 Graduation Stream Analysis</div>', unsafe_allow_html=True)
+        if stream_col and not filtered.empty:
+            stream_summary=(filtered[stream_col].fillna("Not Available").astype(str).str.strip()
+                            .replace("", "Not Available").value_counts().head(6).reset_index())
+            stream_summary.columns=["Graduation Stream","Students"]
+            fig=px.pie(stream_summary,names="Graduation Stream",values="Students",hole=0.52)
+            fig.update_traces(textinfo="percent",textposition="inside")
+            fig.update_layout(
+                template="plotly_white",height=330,margin=dict(l=5,r=5,t=5,b=5),
+                legend=dict(orientation="v",x=1.0,y=0.5),
+                annotations=[dict(text=f"<b>{total_students:,}</b><br>Total",x=0.5,y=0.5,showarrow=False,font=dict(size=16))]
+            )
+            st.plotly_chart(fig,use_container_width=True)
+        else:
+            st.info("Graduation Stream data available nahi hai.")
+
+    with r3:
+        st.markdown('<div class="owner-section">📝 Entrance Exam Analysis</div>', unsafe_allow_html=True)
+        exam_rows=[]
+        temp=filtered.copy()
+        if "Percentile CAT" in temp.columns:
+            exam_rows.append({"Entrance Exam":"CAT","Students":int(pd.to_numeric(temp["Percentile CAT"],errors="coerce").notna().sum())})
+        if "Entrance Exam" in temp.columns and "Percentile score" in temp.columns:
+            temp["_exam"]=temp["Entrance Exam"].fillna("").astype(str).str.upper().str.strip()
+            temp["_score"]=pd.to_numeric(temp["Percentile score"],errors="coerce")
+            for exam in ["MAT","CMAT","XAT","ATMA","GMAT"]:
+                exam_rows.append({"Entrance Exam":exam,"Students":int(((temp["_exam"]==exam)&temp["_score"].notna()).sum())})
+        er=pd.DataFrame(exam_rows)
+        if not er.empty:
+            er=er.sort_values("Students",ascending=False)
+            fig=px.bar(er,x="Students",y="Entrance Exam",orientation="h",text="Students",
+                       color="Entrance Exam",
+                       color_discrete_map={"CAT":"#1D4ED8","CMAT":"#6B3FA0","MAT":"#0F766E","XAT":"#DC2626","ATMA":"#D97706","GMAT":"#0891B2"})
+            fig.update_traces(textposition="outside",cliponaxis=False)
+            fig.update_layout(template="plotly_white",height=330,showlegend=False,
+                              margin=dict(l=10,r=35,t=5,b=5),xaxis_title="",yaxis_title="")
+            fig.update_xaxes(showgrid=False)
+            fig.update_yaxes(autorange="reversed",showgrid=False)
+            st.plotly_chart(fig,use_container_width=True)
+        else:
+            st.info("Entrance Exam data available nahi hai.")
+
+    g1,g2 = st.columns(2,gap="large")
+    with g1:
+        st.markdown('<div class="owner-section">📍 Top States</div>', unsafe_allow_html=True)
+        if state_col and not filtered.empty:
+            gs=(filtered.groupby(state_col).size().reset_index(name="Students")
+                .sort_values("Students",ascending=False).head(8).sort_values("Students"))
+            fig=px.bar(gs,x="Students",y=state_col,orientation="h",text="Students",color="Students",color_continuous_scale="Teal")
+            fig.update_traces(textposition="outside",cliponaxis=False)
+            fig.update_layout(template="plotly_white",height=390,coloraxis_showscale=False,margin=dict(l=20,r=25,t=10,b=20),xaxis_title="Students",yaxis_title="")
+            st.plotly_chart(fig,use_container_width=True)
+        else:
+            st.info("State data available nahi hai.")
+
+    with g2:
+        st.markdown('<div class="owner-section">📍 Geographic Performance</div>', unsafe_allow_html=True)
+        if city_col and not filtered.empty:
+            cs_geo=(filtered.groupby(city_col).size().reset_index(name="Students")
+                    .sort_values("Students",ascending=False).head(8).sort_values("Students"))
+            fig=px.bar(cs_geo,x="Students",y=city_col,orientation="h",text="Students",color="Students",color_continuous_scale="Blues")
+            fig.update_traces(textposition="outside",cliponaxis=False)
+            fig.update_layout(template="plotly_white",height=390,coloraxis_showscale=False,margin=dict(l=20,r=25,t=10,b=20),xaxis_title="Students",yaxis_title="")
+            st.plotly_chart(fig,use_container_width=True)
+        else:
+            st.info("City data available nahi hai.")
+
+    if city_col and not filtered.empty:
+        st.markdown('<div class="owner-section">🏙️ Top Cities</div>', unsafe_allow_html=True)
+        cs=(filtered.groupby(city_col).size().reset_index(name="Students").sort_values("Students",ascending=False).head(12))
+        fig=px.bar(cs,x=city_col,y="Students",text="Students",color="Students",color_continuous_scale="Viridis")
+        fig.update_traces(textposition="outside",cliponaxis=False)
+        fig.update_layout(template="plotly_white",height=420,coloraxis_showscale=False,margin=dict(l=35,r=20,t=20,b=80),xaxis_title="City",yaxis_title="Students")
+        fig.update_xaxes(tickangle=-35,showgrid=False)
+        fig.update_yaxes(showgrid=True,gridcolor="#E8EDF3")
+        st.plotly_chart(fig,use_container_width=True)
+
+    st.markdown('<div class="owner-section">💡 Owner Key Insights</div>', unsafe_allow_html=True)
+    i1,i2,i3=st.columns(3,gap="small")
+    with i1:
+        growth=[]
+        if batch_counts.max()>0:
+            growth.append(f"✓ {batch_counts.idxmax()} batch has highest admissions.")
+        if owner_found and not filtered.empty:
+            top_owner=(filtered[filtered[owner_col]!="Unassigned"][owner_col].value_counts().index[0]
+                       if not filtered[filtered[owner_col]!="Unassigned"].empty else "—")
+            growth.append(f"✓ {top_owner} has the strongest owner contribution.")
+        growth.append(f"✓ Admissions growth is {((batch_counts.max()/max(batch_counts.min(),1)-1)*100):.1f}% between highest and lowest batch.")
+        st.markdown('<div style="border:1px solid #A7E3C2;border-radius:12px;padding:14px;min-height:170px;background:#F5FCF7;"><b style="color:#15803D;">GROWTH OPPORTUNITIES</b><br><br>'+"<br>".join(growth[:3])+'</div>',unsafe_allow_html=True)
+    with i2:
+        watch=[]
+        if quality_available and all60 < total_students:
+            watch.append(f"⚠ Focus on academic quality: only {all60:,} students are 60%+ throughout.")
+        if stream_col and not filtered.empty:
+            watch.append("⚠ Review lower-contributing graduation streams for targeted counselling.")
+        watch.append("⚠ Track low-volume entrance exams for conversion improvement.")
+        st.markdown('<div style="border:1px solid #F2C56B;border-radius:12px;padding:14px;min-height:170px;background:#FFFDF8;"><b style="color:#B45309;">ATTENTION REQUIRED</b><br><br>'+"<br>".join(watch[:3])+'</div>',unsafe_allow_html=True)
+    with i3:
+        best=[]
+        if programme_col:
+            best.append(f"★ {top_programme} is the leading programme.")
+        if state_col:
+            best.append(f"★ {top_state} has the highest geographic contribution.")
+        if owner_filter != "All Owners":
+            best.append(f"★ Individual owner view active: {owner_filter}.")
+        else:
+            best.append("★ Live filters can drill down by Batch, Programme, Owner, Gender, Stream and State.")
+        st.markdown('<div style="border:1px solid #A9C7F5;border-radius:12px;padding:14px;min-height:170px;background:#F8FBFF;"><b style="color:#1D4ED8;">BEST PERFORMING AREAS</b><br><br>'+"<br>".join(best[:3])+'</div>',unsafe_allow_html=True)
+
+    with st.expander("📋 View Filtered Student Records"):
+        show_cols=[c for c in ["Batch",owner_col,programme_col,gender_col,stream_col,state_col,city_col,"Final Status"] if c and c in filtered.columns and c!="_Owner_Display"]
+        st.dataframe(filtered[show_cols] if show_cols else filtered,use_container_width=True)
+
+elif page == "🚀 Command Center":
+    st.markdown("## 🚀 Command Center")
+    st.caption("Complete Admission Intelligence Dashboard")
+
+    admitted_status = ["FULL FEE", "PARTIAL FEE", "WAITLIST FEE"]
+    cc = df[df["Final Status"].isin(admitted_status)].copy()
+
+    def cc_find(candidates):
+        for c in cc.columns:
+            name = str(c).strip().lower()
+            if any(x.lower() == name or x.lower() in name for x in candidates):
+                return c
+        return None
+
+    programme_col = cc_find(["Final Course Selected", "Programme", "Program", "Course"])
+    owner_col = cc_find(["Owner", "Counsellor"])
+    exam_col = cc_find(["Entrance Exam", "Exam"])
+    gender_col = cc_find(["Gender"])
+    state_col = cc_find(["Correspondence State", "State"])
+
+    f1, f2, f3 = st.columns(3)
+    with f1:
+        batch_filter = st.selectbox("📅 Batch", ["All Batches", "2024-26", "2025-27", "2026-28"], key="cc_batch")
+    with f2:
+        p_opts = ["All Programmes"] + (sorted(cc[programme_col].dropna().astype(str).unique().tolist()) if programme_col else [])
+        programme_filter = st.selectbox("🎓 Programme", p_opts, key="cc_programme")
+    with f3:
+        s_opts = ["All States"] + (sorted(cc[state_col].dropna().astype(str).unique().tolist()) if state_col else [])
+        state_filter = st.selectbox("📍 State", s_opts, key="cc_state")
+
+    if batch_filter != "All Batches":
+        cc = cc[cc["Batch"].astype(str) == batch_filter]
+    if programme_col and programme_filter != "All Programmes":
+        cc = cc[cc[programme_col].astype(str) == programme_filter]
+    if state_col and state_filter != "All States":
+        cc = cc[cc[state_col].astype(str) == state_filter]
+
+    def top_item(col):
+        if not col or cc.empty:
+            return "—"
+        x = cc[col].dropna().astype(str)
+        x = x[(x != "") & (x.str.lower() != "nan")]
+        return x.value_counts().index[0] if not x.empty else "—"
+
+    total = len(cc)
+    top_programme = top_item(programme_col)
+    top_owner = top_item(owner_col)
+    top_exam = top_item(exam_col)
+    top_state = top_item(state_col)
+
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.metric("👥 Total Admissions", f"{total:,}")
+    k2.metric("🎓 Top Programme", str(top_programme))
+    k3.metric("📝 Top Exam", str(top_exam))
+    k4.metric("👤 Top Owner", str(top_owner))
+    k5.metric("📍 Top State", str(top_state))
+
+    st.divider()
+
+    c1, c2 = st.columns(2, gap="large")
+    with c1:
+        st.subheader("📈 Admission Trend")
+        trend = cc.groupby("Batch").size().reindex(["2024-26", "2025-27", "2026-28"], fill_value=0).reset_index()
+        trend.columns = ["Batch", "Students"]
+        fig = px.bar(trend, x="Batch", y="Students", text="Students", color="Batch",
+                     category_orders={"Batch": ["2024-26", "2025-27", "2026-28"]})
+        fig.update_traces(textposition="outside", cliponaxis=False)
+        fig.update_layout(template="plotly_white", height=420, showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with c2:
+        st.subheader("🎓 Programme Performance")
+        if programme_col:
+            p = cc.groupby(programme_col).size().reset_index(name="Students").sort_values("Students", ascending=False).head(10)
+            if not p.empty:
+                fig = px.bar(p, x=programme_col, y="Students", text="Students", color="Students")
+                fig.update_traces(textposition="outside", cliponaxis=False)
+                fig.update_layout(template="plotly_white", height=420, coloraxis_showscale=False)
+                fig.update_xaxes(tickangle=-25)
+                st.plotly_chart(fig, use_container_width=True)
+
+    c3, c4 = st.columns(2, gap="large")
+    with c3:
+        st.subheader("👤 Owner Performance")
+        if owner_col:
+            o = cc.groupby(owner_col).size().reset_index(name="Students").sort_values("Students", ascending=False).head(10)
+            if not o.empty:
+                fig = px.bar(o, x="Students", y=owner_col, orientation="h", text="Students", color="Students")
+                fig.update_traces(textposition="outside", cliponaxis=False)
+                fig.update_layout(template="plotly_white", height=420, coloraxis_showscale=False)
+                st.plotly_chart(fig, use_container_width=True)
+
+    with c4:
+        st.subheader("📝 Entrance Exam Intelligence")
+        if exam_col:
+            e = cc.groupby(exam_col).size().reset_index(name="Students").sort_values("Students", ascending=False).head(10)
+            if not e.empty:
+                fig = px.pie(e, names=exam_col, values="Students", hole=0.55)
+                fig.update_layout(template="plotly_white", height=420)
+                st.plotly_chart(fig, use_container_width=True)
+
+    c5, c6 = st.columns(2, gap="large")
+    with c5:
+        st.subheader("📍 Top States")
+        if state_col:
+            s = cc.groupby(state_col).size().reset_index(name="Students").sort_values("Students", ascending=False).head(10)
+            if not s.empty:
+                fig = px.bar(s, x="Students", y=state_col, orientation="h", text="Students", color="Students")
+                fig.update_traces(textposition="outside", cliponaxis=False)
+                fig.update_layout(template="plotly_white", height=420, coloraxis_showscale=False)
+                st.plotly_chart(fig, use_container_width=True)
+
+    with c6:
+        st.subheader("👥 Student Profile")
+        if gender_col:
+            g = cc.groupby(gender_col).size().reset_index(name="Students")
+            if not g.empty:
+                fig = px.pie(g, names=gender_col, values="Students", hole=0.5)
+                fig.update_layout(template="plotly_white", height=420)
+                st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("💡 Command Center Insights")
+    i1, i2, i3, i4 = st.columns(4)
+    i1.success("🏆 Top Programme: " + str(top_programme))
+    i2.info("👤 Top Owner: " + str(top_owner))
+    i3.warning("📝 Leading Exam: " + str(top_exam))
+    i4.success("📍 Top State: " + str(top_state))
 
 elif page == "💰 Scholarship":
-    st.header("💰 Scholarship Analysis")
+
+    # =========================================================
+    # SCHOLARSHIP ANALYSIS — NOIDA LIVE DASHBOARD
+    # =========================================================
+    st.markdown("""
+    <style>
+    .sch-title{font-size:32px!important;font-weight:850!important;color:#243447;margin:0 0 4px 0}
+    .sch-subtitle{color:#64748B;font-size:15px!important;margin-bottom:14px}
+    .sch-filter{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:14px;padding:12px 14px 4px 14px;margin:6px 0 14px 0}
+    .sch-card{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;padding:15px 17px;min-height:104px;box-shadow:0 3px 12px rgba(15,23,42,.06)}
+    .sch-label{color:#64748B;font-size:13px!important;font-weight:750}
+    .sch-value{color:#1E293B;font-size:27px!important;font-weight:850;margin-top:7px;line-height:1.05}
+    .sch-note{color:#94A3B8;font-size:11px!important;margin-top:7px}
+    .sch-section{color:#26384B;font-size:20px!important;font-weight:850;margin:20px 0 9px 0}
+    .sch-insight{border-radius:12px;padding:14px 16px;margin:7px 0;font-size:14px!important;font-weight:600;min-height:150px}
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="sch-title">💰 Scholarship Analysis</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sch-subtitle">Noida admissions — live scholarship performance, amount analysis and key insights</div>', unsafe_allow_html=True)
+
+    admitted_status = ["FULL FEE", "PARTIAL FEE", "WAITLIST FEE"]
+    sch_df = df[df["Final Status"].isin(admitted_status)].copy()
+
+    def _sch_norm(x):
+        return "".join(ch.lower() for ch in str(x) if ch.isalnum())
+
+    def _sch_find(columns, candidates):
+        lookup = {_sch_norm(c): c for c in columns}
+        for candidate in candidates:
+            key = _sch_norm(candidate)
+            if key in lookup:
+                return lookup[key]
+        for candidate in candidates:
+            key = _sch_norm(candidate)
+            for norm, original in lookup.items():
+                if key and (key in norm or norm in key):
+                    return original
+        return None
+
+    # Auto-detect columns so the dashboard continues working if headers have
+    # minor spelling/spacing differences in Google Sheets.
+    programme_col = _sch_find(sch_df.columns, ["Final Course Selected", "Programme", "Program", "Course Selected"])
+    owner_col = _sch_find(sch_df.columns, ["Owner Name", "Owner", "Counsellor Name", "Counselor Name", "Admission Owner", "Assigned To"])
+    city_col = _sch_find(sch_df.columns, ["Correspondence city", "City", "Correspondence City"])
+    state_col = _sch_find(sch_df.columns, ["Correspondence State", "State", "Correspondence state"])
+    category_col = _sch_find(sch_df.columns, [
+        "Scholarship Category", "Scholarship Criteria", "Scholarship Type",
+        "Scholarship", "Criteria", "Scholarship Slab"
+    ])
+    amount_col = _sch_find(sch_df.columns, [
+        "Scholarship Amount", "Scholarship Amt", "Scholarship Value",
+        "Scholarship Amount INR", "Amount", "Scholarship"
+    ])
+
+    # Prefer a column containing both scholarship/concession + amount/value.
+    for c in sch_df.columns:
+        n = _sch_norm(c)
+        if ("scholarship" in n or "concession" in n or "waiver" in n) and any(k in n for k in ["amount","amt","value","inr","rs"]):
+            amount_col = c
+            break
+
+    # If the initially detected "Scholarship" column is not numeric, search
+    # for another numeric-looking scholarship/concession column.
+    if amount_col:
+        probe = pd.to_numeric(
+            sch_df[amount_col].astype(str).str.replace(r"[₹,]", "", regex=True),
+            errors="coerce"
+        )
+        if probe.notna().sum() == 0:
+            for c in sch_df.columns:
+                n = _sch_norm(c)
+                if any(k in n for k in ["scholarship","concession","waiver"]) and any(k in n for k in ["amount","amt","value","discount"]):
+                    amount_col = c
+                    break
+
+    # Prepare clean dimensions.
+    for c in [programme_col, owner_col, city_col, state_col, category_col]:
+        if c:
+            sch_df[c] = sch_df[c].fillna("Not Available").astype(str).str.strip()
+            sch_df.loc[sch_df[c].eq(""), c] = "Not Available"
+
+    if amount_col:
+        sch_df["_Scholarship_Amount"] = pd.to_numeric(
+            sch_df[amount_col].astype(str)
+                  .str.replace(r"[₹,]", "", regex=True)
+                  .str.replace(r"\s+", "", regex=True),
+            errors="coerce"
+        )
+    else:
+        sch_df["_Scholarship_Amount"] = pd.NA
+
+    # Only records with a positive scholarship amount are treated as scholarship records.
+    # If the sheet stores scholarship as a category/criteria without amount,
+    # non-empty category records are used as fallback.
+    if sch_df["_Scholarship_Amount"].notna().any():
+        scholarship_df = sch_df[sch_df["_Scholarship_Amount"].fillna(0) > 0].copy()
+    elif category_col:
+        scholarship_df = sch_df[
+            ~sch_df[category_col].isin(["", "Not Available", "NONE", "NO", "N/A", "0"])
+        ].copy()
+    else:
+        scholarship_df = sch_df.iloc[0:0].copy()
+
+    # ---------------- Filters ----------------
+    st.markdown('<div class="sch-filter">', unsafe_allow_html=True)
+    f1,f2,f3,f4,f5,f6 = st.columns(6)
+
+    with f1:
+        sch_batch = st.selectbox(
+            "📅 Batch",
+            ["All Batches","2024-26","2025-27","2026-28"],
+            key="sch_batch_filter"
+        )
+
+    with f2:
+        prog_opts = ["All Programmes"] + sorted(scholarship_df[programme_col].dropna().unique().tolist()) if programme_col and not scholarship_df.empty else ["All Programmes"]
+        sch_programme = st.selectbox("🎓 Programme", prog_opts, key="sch_programme_filter")
+
+    with f3:
+        owner_opts = ["All Owners"] + sorted(scholarship_df[owner_col].dropna().unique().tolist()) if owner_col and not scholarship_df.empty else ["All Owners"]
+        sch_owner = st.selectbox("👤 Owner", owner_opts, key="sch_owner_filter")
+
+    with f4:
+        city_opts = ["All Cities"] + sorted(scholarship_df[city_col].dropna().unique().tolist()) if city_col and not scholarship_df.empty else ["All Cities"]
+        sch_city = st.selectbox("🏙️ City", city_opts, key="sch_city_filter")
+
+    with f5:
+        state_opts = ["All States"] + sorted(scholarship_df[state_col].dropna().unique().tolist()) if state_col and not scholarship_df.empty else ["All States"]
+        sch_state = st.selectbox("📍 State", state_opts, key="sch_state_filter")
+
+    with f6:
+        if scholarship_df["_Scholarship_Amount"].notna().any():
+            a_min = float(scholarship_df["_Scholarship_Amount"].min())
+            a_max = float(scholarship_df["_Scholarship_Amount"].max())
+            if a_min == a_max:
+                sch_amount_range = (a_min, a_max)
+                st.number_input("💰 Scholarship Amount", value=a_min, disabled=True, key="sch_amount_single")
+            else:
+                sch_amount_range = st.slider(
+                    "💰 Scholarship Amount Range",
+                    min_value=a_min, max_value=a_max,
+                    value=(a_min, a_max),
+                    key="sch_amount_filter"
+                )
+        else:
+            sch_amount_range = None
+            st.selectbox("💰 Scholarship Amount", ["Amount data not available"], disabled=True, key="sch_amount_na")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    filtered_sch = scholarship_df.copy()
+    if sch_batch != "All Batches":
+        filtered_sch = filtered_sch[filtered_sch["Batch"] == sch_batch]
+    if programme_col and sch_programme != "All Programmes":
+        filtered_sch = filtered_sch[filtered_sch[programme_col] == sch_programme]
+    if owner_col and sch_owner != "All Owners":
+        filtered_sch = filtered_sch[filtered_sch[owner_col] == sch_owner]
+    if city_col and sch_city != "All Cities":
+        filtered_sch = filtered_sch[filtered_sch[city_col] == sch_city]
+    if state_col and sch_state != "All States":
+        filtered_sch = filtered_sch[filtered_sch[state_col] == sch_state]
+    if sch_amount_range is not None:
+        filtered_sch = filtered_sch[
+            filtered_sch["_Scholarship_Amount"].between(sch_amount_range[0], sch_amount_range[1], inclusive="both")
+        ]
+
+    # ---------------- KPIs ----------------
+    total_students = len(filtered_sch)
+    total_amount = float(filtered_sch["_Scholarship_Amount"].sum()) if filtered_sch["_Scholarship_Amount"].notna().any() else 0.0
+    avg_amount = float(filtered_sch["_Scholarship_Amount"].mean()) if filtered_sch["_Scholarship_Amount"].notna().any() else 0.0
+
+    batch_sch = filtered_sch.groupby("Batch").size().reindex(["2024-26","2025-27","2026-28"], fill_value=0)
+    best_batch = batch_sch.idxmax() if batch_sch.max() > 0 else "—"
+
+    top_programme = (
+        filtered_sch[programme_col].value_counts().idxmax()
+        if programme_col and not filtered_sch.empty else "—"
+    )
+    top_category = (
+        filtered_sch[category_col].value_counts().idxmax()
+        if category_col and not filtered_sch.empty else "—"
+    )
+
+    k1,k2,k3,k4,k5 = st.columns(5)
+    cards = [
+        (k1,"🎓 Total Scholarship Students",f"{total_students:,}","Current filtered data"),
+        (k2,"💰 Total Scholarship Amount",f"₹{total_amount:,.0f}","Filtered scholarship value"),
+        (k3,"📊 Average Scholarship",f"₹{avg_amount:,.0f}","Average per student"),
+        (k4,"🏆 Best Batch",best_batch,"Highest scholarship students"),
+        (k5,"🏅 Top Criteria / Category",top_category,"Most frequent scholarship basis")
+    ]
+    for col,label,value,note in cards:
+        with col:
+            size = "19px" if len(str(value)) > 14 else "27px"
+            st.markdown(
+                f'<div class="sch-card"><div class="sch-label">{label}</div>'
+                f'<div class="sch-value" style="font-size:{size}!important;">{value}</div>'
+                f'<div class="sch-note">{note}</div></div>',
+                unsafe_allow_html=True
+            )
+
+    if scholarship_df.empty:
+        st.warning(
+            "⚠️ Scholarship records detect nahi hue. Please Google Sheet me Scholarship Amount / Scholarship Category / Criteria column ka header check karein."
+        )
+    else:
+        # =========================================================
+        # SCHOLARSHIP EXAM SCORE RANGE ANALYSIS
+        # EAS decides the winning exam; percentile/score decides the range.
+        # Only scholarship recipients are included, therefore only ranges
+        # actually eligible/used for scholarship appear in the tables/charts.
+        # =========================================================
+        def _safe_num(series):
+            return pd.to_numeric(series, errors="coerce")
+
+        def _find_eas_after(source, percentile_header):
+            try:
+                pos = source.columns.get_loc(percentile_header)
+                if isinstance(pos, slice):
+                    pos = pos.start
+                if isinstance(pos, int) and pos + 1 < len(source.columns):
+                    return source.columns[pos + 1]
+            except Exception:
+                return None
+            return None
+
+        range_df = filtered_sch.copy()
+        range_df["_Scholarship_Exam"] = ""
+        range_df["_Scholarship_Score"] = pd.NA
+
+        cat_pct_col = _sch_find(range_df.columns, ["Percentile CAT"])
+        other_exam_col = _sch_find(range_df.columns, ["Entrance Exam"])
+        other_pct_col = _sch_find(range_df.columns, ["Percentile score"])
+        cat_eas_col = _find_eas_after(range_df, cat_pct_col) if cat_pct_col else None
+        other_eas_col = _find_eas_after(range_df, other_pct_col) if other_pct_col else None
+
+        valid_other = ["CMAT", "MAT", "XAT", "ATMA", "GMAT"]
+        if cat_pct_col:
+            range_df["_CAT_PCT"] = _safe_num(range_df[cat_pct_col])
+        else:
+            range_df["_CAT_PCT"] = pd.NA
+        if other_pct_col:
+            range_df["_OTHER_PCT"] = _safe_num(range_df[other_pct_col])
+        else:
+            range_df["_OTHER_PCT"] = pd.NA
+        if other_exam_col:
+            range_df["_OTHER_EXAM"] = range_df[other_exam_col].fillna("").astype(str).str.upper().str.strip()
+        else:
+            range_df["_OTHER_EXAM"] = ""
+
+        range_df["_CAT_EAS"] = _safe_num(range_df[cat_eas_col]) if cat_eas_col in range_df.columns else pd.NA
+        range_df["_OTHER_EAS"] = _safe_num(range_df[other_eas_col]) if other_eas_col in range_df.columns else pd.NA
+
+        cat_ready = range_df["_CAT_PCT"].notna() & range_df["_CAT_EAS"].notna()
+        other_ready = (
+            range_df["_OTHER_EXAM"].isin(valid_other)
+            & range_df["_OTHER_PCT"].notna()
+            & range_df["_OTHER_EAS"].notna()
+        )
+        cat_wins = cat_ready & (~other_ready | (range_df["_CAT_EAS"] >= range_df["_OTHER_EAS"]))
+        other_wins = other_ready & (~cat_ready | (range_df["_OTHER_EAS"] > range_df["_CAT_EAS"]))
+
+        range_df.loc[cat_wins, "_Scholarship_Exam"] = "CAT"
+        range_df.loc[cat_wins, "_Scholarship_Score"] = range_df.loc[cat_wins, "_CAT_PCT"]
+        range_df.loc[other_wins, "_Scholarship_Exam"] = range_df.loc[other_wins, "_OTHER_EXAM"]
+        range_df.loc[other_wins, "_Scholarship_Score"] = range_df.loc[other_wins, "_OTHER_PCT"]
+
+        # Fallback for scholarship records where EAS is blank: use the available
+        # exam score, but never double count a student.
+        unresolved = range_df["_Scholarship_Exam"].eq("")
+        only_cat = unresolved & range_df["_CAT_PCT"].notna() & ~range_df["_OTHER_EXAM"].isin(valid_other)
+        range_df.loc[only_cat, "_Scholarship_Exam"] = "CAT"
+        range_df.loc[only_cat, "_Scholarship_Score"] = range_df.loc[only_cat, "_CAT_PCT"]
+
+        unresolved = range_df["_Scholarship_Exam"].eq("")
+        only_other = unresolved & range_df["_OTHER_EXAM"].isin(valid_other) & range_df["_OTHER_PCT"].notna() & range_df["_CAT_PCT"].isna()
+        range_df.loc[only_other, "_Scholarship_Exam"] = range_df.loc[only_other, "_OTHER_EXAM"]
+        range_df.loc[only_other, "_Scholarship_Score"] = range_df.loc[only_other, "_OTHER_PCT"]
+
+        range_df["_Scholarship_Score"] = _safe_num(range_df["_Scholarship_Score"])
+        range_df = range_df[
+            range_df["_Scholarship_Exam"].ne("") & range_df["_Scholarship_Score"].notna()
+        ].copy()
+
+        def _score_band(exam, score):
+            score = float(score)
+            # 10-point bands, with the top band ending at 100.
+            low = int(score // 10) * 10
+            if score >= 90:
+                return f"{exam} {low}-100"
+            return f"{exam} {low}-{low+9.99:.2f}"
+
+        if not range_df.empty:
+            range_df["Exam Range"] = [
+                _score_band(exam, score)
+                for exam, score in zip(range_df["_Scholarship_Exam"], range_df["_Scholarship_Score"])
+            ]
+
+        # ---------------- Batch + Programme ----------------
+        c1,c2 = st.columns(2, gap="large")
+
+        with c1:
+            st.markdown('<div class="sch-section">📊 Batch-wise Scholarship</div>', unsafe_allow_html=True)
+            batch_amount = (
+                filtered_sch.groupby("Batch")
+                .agg(Students=("Batch","size"), Amount=("_Scholarship_Amount","sum"))
+                .reindex(["2024-26","2025-27","2026-28"], fill_value=0)
+                .reset_index()
+            )
+            fig = px.bar(
+                batch_amount, x="Batch", y="Students", text="Students",
+                color="Batch",
+                category_orders={"Batch":["2024-26","2025-27","2026-28"]},
+                color_discrete_map={"2024-26":"#2457B2","2025-27":"#169B62","2026-28":"#F21D2F"}
+            )
+            fig.update_traces(textposition="outside", cliponaxis=False)
+            fig.update_layout(template="plotly_white",height=410,showlegend=False,
+                              margin=dict(l=30,r=20,t=10,b=35),
+                              xaxis_title="Batch",yaxis_title="Scholarship Students")
+            fig.update_xaxes(showgrid=False)
+            fig.update_yaxes(showgrid=True,gridcolor="#E8EDF3")
+            st.plotly_chart(fig,use_container_width=True)
+
+        with c2:
+            st.markdown('<div class="sch-section">📚 Programme-wise Scholarship</div>', unsafe_allow_html=True)
+            if programme_col and not filtered_sch.empty:
+                ps = (
+                    filtered_sch.groupby(programme_col)
+                    .agg(Students=(programme_col,"size"), Amount=("_Scholarship_Amount","sum"))
+                    .reset_index().sort_values("Students",ascending=False)
+                )
+                fig = px.bar(ps, x=programme_col, y="Students", text="Students",
+                             color="Students", color_continuous_scale="Blues")
+                fig.update_traces(textposition="outside",cliponaxis=False)
+                fig.update_layout(template="plotly_white",height=410,coloraxis_showscale=False,
+                                  margin=dict(l=25,r=20,t=10,b=55),
+                                  xaxis_title="Programme",yaxis_title="Scholarship Students")
+                fig.update_xaxes(showgrid=False)
+                fig.update_yaxes(showgrid=True,gridcolor="#E8EDF3")
+                st.plotly_chart(fig,use_container_width=True)
+            else:
+                st.info("Programme data available nahi hai.")
+
+        # ---------------- Amount + Owner ----------------
+        c3,c4 = st.columns(2, gap="large")
+
+        with c3:
+            st.markdown('<div class="sch-section">💰 Scholarship Amount Analysis</div>', unsafe_allow_html=True)
+            if filtered_sch["_Scholarship_Amount"].notna().any():
+                bins = [-1, 25000, 50000, 100000, 200000, float("inf")]
+                labels = ["Up to ₹25K","₹25K–₹50K","₹50K–₹1L","₹1L–₹2L","Above ₹2L"]
+                amt = filtered_sch.copy()
+                amt["Amount Range"] = pd.cut(
+                    amt["_Scholarship_Amount"], bins=bins, labels=labels
+                )
+                amt_summary = amt.groupby("Amount Range", observed=False).size().reset_index(name="Students")
+                fig = px.bar(amt_summary,x="Amount Range",y="Students",text="Students",
+                             color="Amount Range",color_discrete_sequence=px.colors.qualitative.Set2)
+                fig.update_traces(textposition="outside",cliponaxis=False)
+                fig.update_layout(template="plotly_white",height=410,showlegend=False,
+                                  margin=dict(l=25,r=20,t=10,b=45),
+                                  xaxis_title="Scholarship Amount Range",yaxis_title="Students")
+                fig.update_xaxes(showgrid=False)
+                fig.update_yaxes(showgrid=True,gridcolor="#E8EDF3")
+                st.plotly_chart(fig,use_container_width=True)
+            else:
+                st.info("Scholarship Amount numeric data available nahi hai.")
+
+        with c4:
+            st.markdown('<div class="sch-section">👤 Owner-wise Scholarship</div>', unsafe_allow_html=True)
+            if owner_col and not filtered_sch.empty:
+                os = (
+                    filtered_sch.groupby(owner_col)
+                    .agg(Students=(owner_col,"size"), Amount=("_Scholarship_Amount","sum"))
+                    .reset_index().sort_values("Students",ascending=False).head(12)
+                    .sort_values("Students")
+                )
+                fig = px.bar(os,x="Students",y=owner_col,orientation="h",text="Students",
+                             color="Students",color_continuous_scale="Teal")
+                fig.update_traces(textposition="outside",cliponaxis=False)
+                fig.update_layout(template="plotly_white",height=410,coloraxis_showscale=False,
+                                  margin=dict(l=25,r=35,t=10,b=30),
+                                  xaxis_title="Scholarship Students",yaxis_title="")
+                fig.update_yaxes(showgrid=False)
+                fig.update_xaxes(showgrid=True,gridcolor="#E8EDF3")
+                st.plotly_chart(fig,use_container_width=True)
+            else:
+                st.info("Owner data available nahi hai.")
+
+        # ---------------- Trend + Category ----------------
+        c5,c6 = st.columns(2, gap="large")
+
+        with c5:
+            st.markdown('<div class="sch-section">📈 Year-wise Scholarship Trend</div>', unsafe_allow_html=True)
+            trend = (
+                filtered_sch.groupby("Batch")
+                .agg(Students=("Batch","size"), Amount=("_Scholarship_Amount","sum"))
+                .reindex(["2024-26","2025-27","2026-28"], fill_value=0)
+                .reset_index()
+            )
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=trend["Batch"],y=trend["Students"],mode="lines+markers+text",
+                text=trend["Students"],textposition="top center",
+                name="Scholarship Students",line=dict(width=3,color="#2457B2")
+            ))
+            fig.update_layout(template="plotly_white",height=410,showlegend=False,
+                              margin=dict(l=30,r=20,t=15,b=35),
+                              xaxis_title="Batch",yaxis_title="Students")
+            fig.update_xaxes(showgrid=False)
+            fig.update_yaxes(showgrid=True,gridcolor="#E8EDF3")
+            st.plotly_chart(fig,use_container_width=True)
+
+        with c6:
+            st.markdown('<div class="sch-section">🏆 Top Scholarship Categories / Criteria</div>', unsafe_allow_html=True)
+            if category_col and not filtered_sch.empty:
+                cs = filtered_sch[category_col].value_counts().head(10).reset_index()
+                cs.columns=["Category / Criteria","Students"]
+                fig = px.bar(cs.sort_values("Students"),x="Students",y="Category / Criteria",
+                             orientation="h",text="Students",color="Students",
+                             color_continuous_scale="Purples")
+                fig.update_traces(textposition="outside",cliponaxis=False)
+                fig.update_layout(template="plotly_white",height=410,coloraxis_showscale=False,
+                                  margin=dict(l=25,r=35,t=10,b=30),
+                                  xaxis_title="Students",yaxis_title="")
+                fig.update_yaxes(showgrid=False)
+                fig.update_xaxes(showgrid=True,gridcolor="#E8EDF3")
+                st.plotly_chart(fig,use_container_width=True)
+            else:
+                st.info("Scholarship Category / Criteria data available nahi hai.")
+
+        # ---------------- State Map + Detailed Table ----------------
+        state_col = _sch_find(filtered_sch.columns, ["Correspondence State", "State"])
+        c7,c8 = st.columns([1.05,1.45], gap="large")
+
+        with c7:
+            st.markdown('<div class="sch-section">📍 State-wise Scholarship Analysis</div>', unsafe_allow_html=True)
+            if state_col and not filtered_sch.empty:
+                ss = (
+                    filtered_sch.groupby(state_col).size().reset_index(name="Students")
+                    .sort_values("Students",ascending=False).head(10).sort_values("Students")
+                )
+                fig = px.bar(ss,x="Students",y=state_col,orientation="h",text="Students",
+                             color="Students",color_continuous_scale="Blues")
+                fig.update_traces(textposition="outside",cliponaxis=False)
+                fig.update_layout(template="plotly_white",height=400,coloraxis_showscale=False,
+                                  margin=dict(l=25,r=35,t=10,b=30),
+                                  xaxis_title="Students",yaxis_title="")
+                fig.update_yaxes(showgrid=False)
+                fig.update_xaxes(showgrid=True,gridcolor="#E8EDF3")
+                st.plotly_chart(fig,use_container_width=True)
+            else:
+                st.info("State data available nahi hai.")
+
+        st.markdown('<div class="sch-section">🗺️ Geographic Scholarship Map</div>', unsafe_allow_html=True)
+        india_state_coords = {
+            "ANDHRA PRADESH":(15.9129,79.7400), "ASSAM":(26.2006,92.9376),
+            "BIHAR":(25.0961,85.3131), "CHHATTISGARH":(21.2787,81.8661),
+            "DELHI":(28.7041,77.1025), "GOA":(15.2993,74.1240),
+            "GUJARAT":(22.2587,71.1924), "HARYANA":(29.0588,76.0856),
+            "JHARKHAND":(23.6102,85.2799), "KARNATAKA":(15.3173,75.7139),
+            "KERALA":(10.8505,76.2711), "MADHYA PRADESH":(22.9734,78.6569),
+            "MAHARASHTRA":(19.7515,75.7139), "ODISHA":(20.9517,85.0985),
+            "PUNJAB":(31.1471,75.3412), "RAJASTHAN":(27.0238,74.2179),
+            "TAMIL NADU":(11.1271,78.6569), "TELANGANA":(18.1124,79.0193),
+            "UTTAR PRADESH":(26.8467,80.9462), "UTTARAKHAND":(30.0668,79.0193),
+            "WEST BENGAL":(22.9868,87.8550), "JAMMU AND KASHMIR":(33.7782,76.5762),
+            "HIMACHAL PRADESH":(31.1048,77.1734), "CHANDIGARH":(30.7333,76.7794)
+        }
+        if state_col and not filtered_sch.empty:
+            map_state = filtered_sch.copy()
+            map_state["_MAP_STATE"] = map_state[state_col].fillna("").astype(str).str.upper().str.strip()
+            map_state["_MAP_STATE"] = map_state["_MAP_STATE"].str.replace("&", "AND", regex=False)
+            geo_rows=[]
+            for state_name, grp in map_state.groupby("_MAP_STATE"):
+                if state_name in india_state_coords:
+                    lat, lon = india_state_coords[state_name]
+                    geo_rows.append({
+                        "State":state_name.title(), "Latitude":lat, "Longitude":lon,
+                        "Students":len(grp),
+                        "Amount":float(grp["_Scholarship_Amount"].sum())
+                    })
+            geo_df=pd.DataFrame(geo_rows)
+            if not geo_df.empty:
+                fig = px.scatter_geo(
+                    geo_df, lat="Latitude", lon="Longitude", size="Students", color="Students",
+                    hover_name="State",
+                    hover_data={"Amount":":,.0f", "Latitude":False, "Longitude":False},
+                    projection="natural earth", scope="asia", size_max=48,
+                    color_continuous_scale="Blues"
+                )
+                fig.update_geos(
+                    center=dict(lat=22.5, lon=80.0), projection_scale=4.2,
+                    showcountries=True, countrycolor="#CBD5E1",
+                    showland=True, landcolor="#F8FAFC",
+                    showocean=True, oceancolor="#EAF4FF",
+                    showlakes=True, lakecolor="#EAF4FF"
+                )
+                fig.update_layout(template="plotly_white", height=520,
+                                  margin=dict(l=0,r=0,t=10,b=0), coloraxis_showscale=False)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Map ke liye recognized Indian State names detect nahi hue. State-wise bar chart above available hai.")
+        else:
+            st.info("Map ke liye State data available nahi hai.")
+
+        with c8:
+            st.markdown('<div class="sch-section">📋 Detailed Scholarship Summary</div>', unsafe_allow_html=True)
+            detail_cols = ["Batch"]
+            for c in [programme_col, owner_col, city_col, category_col, amount_col]:
+                if c and c in filtered_sch.columns and c not in detail_cols:
+                    detail_cols.append(c)
+
+            detail = filtered_sch[detail_cols].copy() if detail_cols else filtered_sch.copy()
+            if amount_col and amount_col in detail.columns:
+                detail = detail.rename(columns={amount_col:"Scholarship Amount"})
+            elif "_Scholarship_Amount" in filtered_sch.columns:
+                detail["Scholarship Amount"] = filtered_sch["_Scholarship_Amount"].values
+
+            st.dataframe(detail, use_container_width=True, hide_index=True, height=365)
+
+        # ---------------- Key Insights ----------------
+        st.markdown('<div class="sch-section">💡 Scholarship Key Insights</div>', unsafe_allow_html=True)
+        i1,i2,i3 = st.columns(3,gap="small")
+
+        with i1:
+            insights = []
+            if total_students:
+                insights.append(f"✓ {best_batch} batch has the highest scholarship participation.")
+                insights.append(f"✓ {total_students:,} scholarship students in the current filtered view.")
+                if total_amount > 0:
+                    insights.append(f"✓ Total scholarship value is ₹{total_amount:,.0f}.")
+            else:
+                insights.append("✓ Current filters me scholarship record available nahi hai.")
+            st.markdown(
+                '<div class="sch-insight" style="border:1px solid #A7E3C2;background:#F5FCF7;">'
+                '<b style="color:#15803D;">GROWTH OPPORTUNITIES</b><br><br>'
+                + "<br>".join(insights[:3]) + '</div>',
+                unsafe_allow_html=True
+            )
+
+        with i2:
+            watch = []
+            if total_students and avg_amount > 0:
+                watch.append(f"⚠ Average scholarship is ₹{avg_amount:,.0f}; amount distribution should be monitored.")
+            if category_col:
+                watch.append("⚠ Review low-volume scholarship categories for awareness and utilisation.")
+            watch.append("⚠ Use Batch, City and Amount filters to identify focused opportunities.")
+            st.markdown(
+                '<div class="sch-insight" style="border:1px solid #F2C56B;background:#FFFDF8;">'
+                '<b style="color:#B45309;">ATTENTION REQUIRED</b><br><br>'
+                + "<br>".join(watch[:3]) + '</div>',
+                unsafe_allow_html=True
+            )
+
+        with i3:
+            best = []
+            if programme_col:
+                best.append(f"★ {top_programme} is the leading programme for scholarships.")
+            if category_col:
+                best.append(f"★ {top_category} is the top scholarship category / criteria.")
+            if city_col and sch_city != "All Cities":
+                best.append(f"★ City drill-down active: {sch_city}.")
+            else:
+                best.append("★ City and Amount slicers are available for individual analysis.")
+            st.markdown(
+                '<div class="sch-insight" style="border:1px solid #A9C7F5;background:#F8FBFF;">'
+                '<b style="color:#1D4ED8;">BEST PERFORMING AREAS</b><br><br>'
+                + "<br>".join(best[:3]) + '</div>',
+                unsafe_allow_html=True
+            )
+
+        # =====================================================
+        # SCORE RANGE ANALYSIS - KEPT LAST AS REQUESTED
+        # =====================================================
+        st.markdown('<div class="sch-section">🎯 Scholarship Exam Score Range Analysis</div>', unsafe_allow_html=True)
+        st.caption("Only scholarship recipients are included. Exam selection is based on EAS, while the displayed range is based on the corresponding percentile / entrance score.")
+
+        if not range_df.empty:
+            def _range_summary(source):
+                out = (
+                    source.groupby("Exam Range", as_index=False)
+                    .agg(
+                        Count=("Exam Range", "size"),
+                        Amount=("_Scholarship_Amount", "mean"),
+                        Total=("_Scholarship_Amount", "sum")
+                    )
+                )
+                order = {e:i for i,e in enumerate(["CAT","MAT","CMAT","XAT","ATMA","GMAT"])}
+                out["_exam_order"] = out["Exam Range"].str.split().str[0].map(order).fillna(99)
+                out["_range_low"] = out["Exam Range"].str.extract(r"(\d+(?:\.\d+)?)")[0].astype(float)
+                out = out.sort_values(["_exam_order","_range_low"]).drop(columns=["_exam_order","_range_low"])
+                return out
+
+            combined_range = _range_summary(range_df)
+
+            # =====================================================
+            # YEAR-WISE SCHOLARSHIP SCORE RANGE TABLE
+            # All Batches + 2024-26 + 2025-27 + 2026-28
+            # Table and ranges change when a batch tab is selected.
+            # Only scholarship recipients / eligible score ranges appear.
+            # =====================================================
+            st.markdown('<div class="sch-section">🗓️ Year-wise Scholarship Score Range Summary</div>', unsafe_allow_html=True)
+            range_tabs = st.tabs(["All Batches", "2024-26", "2025-27", "2026-28"])
+
+            def _show_range_table(source, empty_message):
+                if source.empty:
+                    st.info(empty_message)
+                    return
+                tbl = _range_summary(source).copy()
+                tbl["Amount"] = tbl["Amount"].round(0).astype(int)
+                tbl["Total"] = tbl["Total"].round(0).astype(int)
+                tbl = tbl.rename(columns={
+                    "Exam Range": "Exam Range",
+                    "Count": "Count",
+                    "Amount": "Scholarship Amount (₹)",
+                    "Total": "Total (₹)"
+                })
+                total_row = pd.DataFrame({
+                    "Exam Range": ["Total"],
+                    "Count": [int(tbl["Count"].sum())],
+                    "Scholarship Amount (₹)": [int(tbl["Scholarship Amount (₹)"].sum())],
+                    "Total (₹)": [int(tbl["Total (₹)"].sum())]
+                })
+                st.dataframe(
+                    pd.concat([tbl, total_row], ignore_index=True),
+                    use_container_width=True, hide_index=True
+                )
+
+            with range_tabs[0]:
+                _show_range_table(range_df, "All Batches me scholarship exam-score data available nahi hai.")
+            for tab, batch_name in zip(range_tabs[1:], ["2024-26", "2025-27", "2026-28"]):
+                with tab:
+                    _show_range_table(
+                        range_df[range_df["Batch"] == batch_name],
+                        f"{batch_name} me scholarship exam-score data available nahi hai."
+                    )
+
+            rc1, rc2 = st.columns(2, gap="large")
+            with rc1:
+                st.markdown('<div class="sch-section">📊 Scholarship Students by Score Range</div>', unsafe_allow_html=True)
+                fig = px.bar(
+                    combined_range,
+                    x="Exam Range", y="Count", text="Count", color="Exam Range",
+                    color_discrete_sequence=px.colors.qualitative.Set2
+                )
+                fig.update_traces(textposition="outside", cliponaxis=False)
+                fig.update_layout(template="plotly_white", height=430, showlegend=False,
+                                  xaxis_title="Scholarship Eligible Score Range", yaxis_title="Students",
+                                  margin=dict(l=30,r=20,t=15,b=75))
+                fig.update_xaxes(tickangle=-35, showgrid=False)
+                fig.update_yaxes(showgrid=True, gridcolor="#E8EDF3")
+                st.plotly_chart(fig, use_container_width=True)
+
+            with rc2:
+                st.markdown('<div class="sch-section">💰 Scholarship Amount by Score Range</div>', unsafe_allow_html=True)
+                fig = px.bar(
+                    combined_range,
+                    x="Exam Range", y="Total", text="Total", color="Exam Range",
+                    color_discrete_sequence=px.colors.qualitative.Bold
+                )
+                fig.update_traces(texttemplate="₹%{text:,.0f}", textposition="outside", cliponaxis=False)
+                fig.update_layout(template="plotly_white", height=430, showlegend=False,
+                                  xaxis_title="Scholarship Eligible Score Range", yaxis_title="Total Scholarship Amount",
+                                  margin=dict(l=30,r=20,t=15,b=75))
+                fig.update_xaxes(tickangle=-35, showgrid=False)
+                fig.update_yaxes(showgrid=True, gridcolor="#E8EDF3")
+                st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Scholarship recipients ke liye CAT / MAT / CMAT / XAT / ATMA / GMAT score data detect nahi hua.")
+
 
 elif page == "📥 Download Report":
     st.header("📥 Download Report")
