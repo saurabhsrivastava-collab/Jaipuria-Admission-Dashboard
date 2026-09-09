@@ -100,6 +100,28 @@ st.title("🎓 Jaipuria Admission Dashboard")
 st.subheader("Live Google Sheet Connected 🟢")
 st.divider()
 
+# ============================================================
+# CURRENT VIEW MARQUEE
+# Shows ONLY the currently selected sidebar view.
+# Existing tabs, filters, charts and data logic remain unchanged.
+# ============================================================
+st.markdown(f"""
+<style>
+.jaipuria-marquee-wrap {{ width:100%; overflow:hidden; position:relative; margin:4px 0 18px 0; padding:10px 0; border-top:1px solid #E2E8F0; border-bottom:1px solid #E2E8F0; background:#F8FAFC; border-radius:10px; }}
+.jaipuria-marquee-track {{ display:inline-flex; width:max-content; white-space:nowrap; animation:jaipuria-marquee-left-to-right 14s linear infinite; }}
+.jaipuria-marquee-item {{ display:inline-block; padding:0 70px; color:#1E3A8A; font-size:21px !important; font-weight:800; letter-spacing:.3px; }}
+.jaipuria-marquee-dot {{ color:#94A3B8; padding:0 18px; font-size:18px !important; }}
+@keyframes jaipuria-marquee-left-to-right {{ 0% {{ transform:translateX(-100%); }} 100% {{ transform:translateX(100vw); }} }}
+.jaipuria-marquee-wrap:hover .jaipuria-marquee-track {{ animation-play-state:paused; }}
+@media (max-width:700px) {{ .jaipuria-marquee-item {{ font-size:17px !important; padding:0 40px; }} }}
+</style>
+<div class="jaipuria-marquee-wrap">
+  <div class="jaipuria-marquee-track">
+    <span class="jaipuria-marquee-item">{page}</span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
 SHEET_ID = "1RKLRXNSFxeq4kXEYxA9y0EFuK-5Ozukrr3ejjxm0764"
 
 # ============================================================
