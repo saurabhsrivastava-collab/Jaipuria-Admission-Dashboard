@@ -63,6 +63,165 @@ p,span,div,label{
     font-size:20px !important;
 }
 
+
+
+/* ============================================================
+   UNIVERSAL KPI BOX STYLE — applied across ALL dashboard tabs
+   Keeps existing KPI content/layout, only upgrades the card design.
+   ============================================================ */
+.kpi-card, .owner-card, .sch-card {
+    border: 1px solid #DCE5EF !important;
+    border-radius: 14px !important;
+    box-shadow: 0 4px 14px rgba(15,23,42,.07) !important;
+    overflow: hidden !important;
+    position: relative !important;
+    transition: transform .2s ease, box-shadow .2s ease !important;
+    animation: jaipuria-kpi-float 3.6s ease-in-out infinite !important;
+    will-change: transform;
+}
+.kpi-card:hover, .owner-card:hover, .sch-card:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 8px 20px rgba(15,23,42,.12) !important;
+}
+
+/* Entrance Exam cards */
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.kpi-card):nth-child(1) .kpi-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.sch-card):nth-child(1) .sch-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.owner-card):nth-child(1) .owner-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(1) [data-testid="stMetric"] {
+    background: linear-gradient(145deg,#FFFFFF 0%,#EFF6FF 100%) !important;
+    border-left: 5px solid #2563EB !important;
+}
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.kpi-card):nth-child(2) .kpi-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.sch-card):nth-child(2) .sch-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.owner-card):nth-child(2) .owner-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(2) [data-testid="stMetric"] {
+    background: linear-gradient(145deg,#FFFFFF 0%,#F5F3FF 100%) !important;
+    border-left: 5px solid #7C3AED !important;
+}
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.kpi-card):nth-child(3) .kpi-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.sch-card):nth-child(3) .sch-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.owner-card):nth-child(3) .owner-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(3) [data-testid="stMetric"] {
+    background: linear-gradient(145deg,#FFFFFF 0%,#ECFEFF 100%) !important;
+    border-left: 5px solid #0891B2 !important;
+}
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.kpi-card):nth-child(4) .kpi-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.sch-card):nth-child(4) .sch-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.owner-card):nth-child(4) .owner-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(4) [data-testid="stMetric"] {
+    background: linear-gradient(145deg,#FFFFFF 0%,#FFF7ED 100%) !important;
+    border-left: 5px solid #EA580C !important;
+}
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.kpi-card):nth-child(5) .kpi-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.sch-card):nth-child(5) .sch-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.owner-card):nth-child(5) .owner-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(5) [data-testid="stMetric"] {
+    background: linear-gradient(145deg,#FFFFFF 0%,#ECFDF5 100%) !important;
+    border-left: 5px solid #059669 !important;
+}
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.kpi-card):nth-child(6) .kpi-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(6) [data-testid="stMetric"] {
+    background: linear-gradient(145deg,#FFFFFF 0%,#FFF1F2 100%) !important;
+    border-left: 5px solid #E11D48 !important;
+}
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.kpi-card):nth-child(7) .kpi-card,
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(7) [data-testid="stMetric"] {
+    background: linear-gradient(145deg,#FFFFFF 0%,#F0FDFA 100%) !important;
+    border-left: 5px solid #0F766E !important;
+}
+
+/* Gentle synchronized up/down floating for every visible KPI box */
+.kpi-card, .owner-card, .sch-card, .tab-kpi-card, .cc-kpi-card, [data-testid="stMetric"] {
+    animation: jaipuria-kpi-float 3.6s ease-in-out infinite !important;
+    animation-delay: 0s !important;
+    will-change: transform;
+}
+
+@keyframes jaipuria-kpi-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+/* ------------------------------------------------------------
+   TAB-SPECIFIC KPI PALETTES
+   Each dashboard tab gets its own colour family while keeping
+   the same clean card structure.
+   ------------------------------------------------------------ */
+.kpi-tab-marker { display:none !important; }
+
+/* Insights — blue / violet / teal / amber */
+.kpi-scope-insights div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(1) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#EFF6FF)!important;border-bottom:4px solid #2563EB!important; }
+.kpi-scope-insights div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(2) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#F5F3FF)!important;border-bottom:4px solid #7C3AED!important; }
+.kpi-scope-insights div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(3) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#ECFEFF)!important;border-bottom:4px solid #0891B2!important; }
+.kpi-scope-insights div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(4) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#FFF7ED)!important;border-bottom:4px solid #EA580C!important; }
+
+/* Gender — rose / indigo / emerald / orange */
+.kpi-scope-gender div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(1) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#FFF1F2)!important;border-bottom:4px solid #E11D48!important; }
+.kpi-scope-gender div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(2) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#EEF2FF)!important;border-bottom:4px solid #4F46E5!important; }
+.kpi-scope-gender div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(3) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#ECFDF5)!important;border-bottom:4px solid #059669!important; }
+.kpi-scope-gender div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(4) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#FFF7ED)!important;border-bottom:4px solid #F97316!important; }
+
+/* Stream — violet / cyan / lime / sky */
+.kpi-scope-stream div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(1) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#F5F3FF)!important;border-bottom:4px solid #8B5CF6!important; }
+.kpi-scope-stream div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(2) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#ECFEFF)!important;border-bottom:4px solid #06B6D4!important; }
+.kpi-scope-stream div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(3) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#F7FEE7)!important;border-bottom:4px solid #65A30D!important; }
+.kpi-scope-stream div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(4) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#F0F9FF)!important;border-bottom:4px solid #0284C7!important; }
+
+/* State & City — sky / teal / amber / red */
+.kpi-scope-geo div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(1) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#EFF6FF)!important;border-bottom:4px solid #0284C7!important; }
+.kpi-scope-geo div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(2) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#F0FDFA)!important;border-bottom:4px solid #0D9488!important; }
+.kpi-scope-geo div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(3) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#FFFBEB)!important;border-bottom:4px solid #D97706!important; }
+.kpi-scope-geo div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]):nth-child(4) [data-testid="stMetric"] { background:linear-gradient(145deg,#FFFFFF,#FFF1F2)!important;border-bottom:4px solid #DC2626!important; }
+
+/* Owner — indigo / gold / teal / purple / rose */
+.kpi-scope-owner div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.owner-card):nth-child(1) .owner-card { background:linear-gradient(145deg,#FFFFFF,#EEF2FF)!important;border-left:5px solid #4F46E5!important; }
+.kpi-scope-owner div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.owner-card):nth-child(2) .owner-card { background:linear-gradient(145deg,#FFFFFF,#FFFBEB)!important;border-left:5px solid #D97706!important; }
+.kpi-scope-owner div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.owner-card):nth-child(3) .owner-card { background:linear-gradient(145deg,#FFFFFF,#F0FDFA)!important;border-left:5px solid #0D9488!important; }
+.kpi-scope-owner div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.owner-card):nth-child(4) .owner-card { background:linear-gradient(145deg,#FFFFFF,#F5F3FF)!important;border-left:5px solid #9333EA!important; }
+.kpi-scope-owner div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.owner-card):nth-child(5) .owner-card { background:linear-gradient(145deg,#FFFFFF,#FFF1F2)!important;border-left:5px solid #E11D48!important; }
+
+/* Scholarship — emerald / gold / blue / purple / coral */
+.kpi-scope-scholarship div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.sch-card):nth-child(1) .sch-card { background:linear-gradient(145deg,#FFFFFF,#ECFDF5)!important;border-left:5px solid #059669!important; }
+.kpi-scope-scholarship div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.sch-card):nth-child(2) .sch-card { background:linear-gradient(145deg,#FFFFFF,#FFFBEB)!important;border-left:5px solid #D97706!important; }
+.kpi-scope-scholarship div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.sch-card):nth-child(3) .sch-card { background:linear-gradient(145deg,#FFFFFF,#EFF6FF)!important;border-left:5px solid #2563EB!important; }
+.kpi-scope-scholarship div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.sch-card):nth-child(4) .sch-card { background:linear-gradient(145deg,#FFFFFF,#F5F3FF)!important;border-left:5px solid #7C3AED!important; }
+.kpi-scope-scholarship div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.sch-card):nth-child(5) .sch-card { background:linear-gradient(145deg,#FFFFFF,#FFF1F2)!important;border-left:5px solid #F43F5E!important; }
+
+/* Entrance Exam — seven distinct exam colours */
+.kpi-scope-entrance div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.kpi-card):nth-child(1) .kpi-card { background:linear-gradient(145deg,#FFFFFF,#EEF2FF)!important;border-left:5px solid #4F46E5!important; }
+.kpi-scope-entrance div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.kpi-card):nth-child(2) .kpi-card { background:linear-gradient(145deg,#FFFFFF,#EFF6FF)!important;border-left:5px solid #2563EB!important; }
+.kpi-scope-entrance div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.kpi-card):nth-child(3) .kpi-card { background:linear-gradient(145deg,#FFFFFF,#ECFDF5)!important;border-left:5px solid #059669!important; }
+.kpi-scope-entrance div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.kpi-card):nth-child(4) .kpi-card { background:linear-gradient(145deg,#FFFFFF,#ECFEFF)!important;border-left:5px solid #0891B2!important; }
+.kpi-scope-entrance div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.kpi-card):nth-child(5) .kpi-card { background:linear-gradient(145deg,#FFFFFF,#FFF1F2)!important;border-left:5px solid #E11D48!important; }
+.kpi-scope-entrance div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.kpi-card):nth-child(6) .kpi-card { background:linear-gradient(145deg,#FFFFFF,#FFF7ED)!important;border-left:5px solid #EA580C!important; }
+.kpi-scope-entrance div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has(.kpi-card):nth-child(7) .kpi-card { background:linear-gradient(145deg,#FFFFFF,#F5F3FF)!important;border-left:5px solid #7C3AED!important; }
+
+/* Streamlit native metric cards used by Insights / Gender / Stream / State & City */
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]) [data-testid="stMetric"] {
+    min-height: 104px !important;
+    padding: 18px 18px 16px 18px !important;
+    box-sizing: border-box !important;
+    border-radius: 14px !important;
+    box-shadow: 0 4px 14px rgba(15,23,42,.07) !important;
+    border-top: 1px solid #DCE5EF !important;
+    border-right: 1px solid #DCE5EF !important;
+    border-bottom: 4px solid #DCE5EF !important;
+}
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]) [data-testid="stMetricLabel"] {
+    font-weight: 700 !important;
+    color: #526174 !important;
+}
+div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:has([data-testid="stMetric"]) [data-testid="stMetricValue"] {
+    font-weight: 800 !important;
+    color: #1E293B !important;
+}
+
+/* Common card typography */
+.owner-card-label, .sch-label { color:#526174 !important; font-weight:700 !important; }
+.owner-card-value, .sch-value { color:#1E293B !important; font-weight:800 !important; }
+.owner-card-note, .sch-note { color:#94A3B8 !important; }
+
 </style>
 """, unsafe_allow_html=True)
 # ---------------- Sidebar ----------------
@@ -100,27 +259,230 @@ st.title("🎓 Jaipuria Admission Dashboard")
 st.subheader("Live Google Sheet Connected 🟢")
 st.divider()
 
+
 # ============================================================
-# CURRENT VIEW MARQUEE
-# Shows ONLY the currently selected sidebar view.
-# Existing tabs, filters, charts and data logic remain unchanged.
+# FILTER / CURRENT VIEW NAVIGATION STYLE
 # ============================================================
-st.markdown(f"""
+st.markdown("""
 <style>
-.jaipuria-marquee-wrap {{ width:100%; overflow:hidden; position:relative; margin:4px 0 18px 0; padding:10px 0; border-top:1px solid #E2E8F0; border-bottom:1px solid #E2E8F0; background:#F8FAFC; border-radius:10px; }}
-.jaipuria-marquee-track {{ display:inline-flex; width:max-content; white-space:nowrap; animation:jaipuria-marquee-left-to-right 14s linear infinite; }}
-.jaipuria-marquee-item {{ display:inline-block; padding:0 70px; color:#1E3A8A; font-size:21px !important; font-weight:800; letter-spacing:.3px; }}
-.jaipuria-marquee-dot {{ color:#94A3B8; padding:0 18px; font-size:18px !important; }}
-@keyframes jaipuria-marquee-left-to-right {{ 0% {{ transform:translateX(-100%); }} 100% {{ transform:translateX(100vw); }} }}
-.jaipuria-marquee-wrap:hover .jaipuria-marquee-track {{ animation-play-state:paused; }}
-@media (max-width:700px) {{ .jaipuria-marquee-item {{ font-size:17px !important; padding:0 40px; }} }}
+.jaipuria-filter-title {
+    font-size: 22px !important;
+    font-weight: 800 !important;
+    color: #243447;
+    margin: 4px 0 0 0;
+    padding-bottom: 7px;
+    border-bottom: 5px solid #F59E0B;
+    line-height: 1.15;
+}
+.jaipuria-filter-area {
+    margin-top: 12px;
+}
+/* Command Center KPI cards: colourful static cards */
+.cc-kpi-boxes {
+    width: 100%;
+    display: flex;
+    gap: 18px;
+    margin: 18px 0 20px 0;
+    align-items: stretch;
+}
+.cc-kpi-card {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 104px;
+    padding: 18px 18px 16px 18px;
+    box-sizing: border-box;
+    border: 1px solid #DCE5EF;
+    border-radius: 14px;
+    background: linear-gradient(145deg, #FFFFFF 0%, #F8FAFC 100%);
+    box-shadow: 0 4px 14px rgba(15,23,42,.07);
+    transition: transform .2s ease, box-shadow .2s ease;
+    position: relative;
+    overflow: hidden;
+}
+.cc-kpi-card::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4px;
+    border-radius: 0 0 14px 14px;
+}
+.cc-kpi-card:nth-child(1) {
+    border-left: 5px solid #2563EB;
+    background: linear-gradient(145deg, #FFFFFF 0%, #EFF6FF 100%);
+}
+.cc-kpi-card:nth-child(1)::after { background: #2563EB; }
+.cc-kpi-card:nth-child(2) {
+    border-left: 5px solid #7C3AED;
+    background: linear-gradient(145deg, #FFFFFF 0%, #F5F3FF 100%);
+}
+.cc-kpi-card:nth-child(2)::after { background: #7C3AED; }
+.cc-kpi-card:nth-child(3) {
+    border-left: 5px solid #0891B2;
+    background: linear-gradient(145deg, #FFFFFF 0%, #ECFEFF 100%);
+}
+.cc-kpi-card:nth-child(3)::after { background: #0891B2; }
+.cc-kpi-card:nth-child(4) {
+    border-left: 5px solid #EA580C;
+    background: linear-gradient(145deg, #FFFFFF 0%, #FFF7ED 100%);
+}
+.cc-kpi-card:nth-child(4)::after { background: #EA580C; }
+.cc-kpi-card:nth-child(5) {
+    border-left: 5px solid #059669;
+    background: linear-gradient(145deg, #FFFFFF 0%, #ECFDF5 100%);
+}
+.cc-kpi-card:nth-child(5)::after { background: #059669; }
+.cc-kpi-card:hover {
+    box-shadow: 0 8px 20px rgba(15,23,42,.12);
+}
+.cc-kpi-title {
+    color: #526174;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tab-kpi-grid {
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:18px;
+    width:100%;
+    margin:14px 0 20px 0;
+}
+.tab-kpi-card {
+    min-height:96px;
+    padding:16px 18px 14px 18px;
+    box-sizing:border-box;
+    border:1px solid #DCE5EF;
+    border-left:5px solid var(--kpi-accent);
+    border-radius:14px;
+    background:linear-gradient(145deg,#FFFFFF 0%,#F8FAFC 100%);
+    box-shadow:0 4px 14px rgba(15,23,42,.07);
+    position:relative;
+    overflow:hidden;
+    transition:transform .2s ease, box-shadow .2s ease;
+}
+.tab-kpi-card::after {
+    content:"";
+    position:absolute;
+    left:0; right:0; bottom:0;
+    height:4px;
+    background:var(--kpi-accent);
+    opacity:.9;
+}
+.tab-kpi-card:hover { box-shadow:0 8px 20px rgba(15,23,42,.12); }
+.tab-kpi-label { color:#475569; font-size:15px!important; font-weight:700!important; line-height:1.25; }
+.tab-kpi-value { color:#1E293B; font-size:25px!important; font-weight:850!important; line-height:1.2; margin-top:7px; word-break:break-word; }
+@media (max-width:900px) { .tab-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:560px) { .tab-kpi-grid { grid-template-columns:1fr; } }
+
+.cc-kpi-value {
+    color: #1E293B;
+    font-size: 21px;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-top: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+@media (max-width: 1100px) {
+    .cc-kpi-boxes { gap: 12px; }
+    .cc-kpi-card { padding: 15px 13px; }
+    .cc-kpi-title { font-size: 13px; }
+    .cc-kpi-value { font-size: 18px; }
+}
+@media (max-width: 700px) {
+    .jaipuria-filter-title { font-size: 19px !important; }
+}
+
+/* Page heading motion: the selected tab heading gently travels left ↔ right. */
+.jaipuria-page-heading-wrap {
+    width: 100%;
+    overflow: hidden;
+    margin: 4px 0 8px 0;
+    position: relative;
+    min-height: 34px;
+}
+.jaipuria-page-heading {
+    display: block;
+    width: max-content;
+    white-space: nowrap;
+    color: #26384B;
+    font-size: 25px;
+    font-weight: 800;
+    line-height: 1.25;
+    animation: jaipuria-heading-ltr 5.5s ease-in-out infinite alternate;
+    will-change: transform;
+}
+/* Full-width travel: heading starts at the left edge and reaches the right edge. */
+@keyframes jaipuria-heading-ltr {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(calc(100vw - 380px - 100%)); }
+}
+.entrance-page-title, .owner-title, .sch-title {
+    position: relative;
+    width: max-content;
+    animation: jaipuria-heading-ltr 5.5s ease-in-out infinite alternate;
+    will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+    .jaipuria-page-heading, .entrance-page-title, .owner-title, .sch-title {
+        animation: none !important;
+    }
+}
 </style>
-<div class="jaipuria-marquee-wrap">
-  <div class="jaipuria-marquee-track">
-    <span class="jaipuria-marquee-item">{page}</span>
-  </div>
-</div>
 """, unsafe_allow_html=True)
+
+def show_colour_kpi_cards(items, theme="blue"):
+    """Render static colourful KPI cards; each dashboard tab can use its own palette."""
+    import html
+    palettes = {
+        "insights": ["#2563EB", "#7C3AED", "#0891B2", "#EA580C"],
+        "gender": ["#E11D48", "#4F46E5", "#059669", "#F97316"],
+        "stream": ["#8B5CF6", "#06B6D4", "#65A30D", "#0284C7"],
+        "geo": ["#0284C7", "#0D9488", "#D97706", "#DC2626"],
+    }
+    colors = palettes.get(theme, palettes["insights"])
+    cards = []
+    for i, (label, value) in enumerate(items):
+        color = colors[i % len(colors)]
+        safe_label = html.escape(str(label))
+        safe_value = html.escape(str(value))
+        cards.append(
+            f"""<div class='tab-kpi-card' style='--kpi-accent:{color};'>
+                <div class='tab-kpi-label'>{safe_label}</div>
+                <div class='tab-kpi-value'>{safe_value}</div>
+            </div>"""
+        )
+    st.markdown("<div class='tab-kpi-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
+
+
+def show_page_heading(text):
+    import html
+    st.markdown(
+        f"<div class='jaipuria-page-heading-wrap'><div class='jaipuria-page-heading'>{html.escape(str(text))}</div></div>",
+        unsafe_allow_html=True,
+    )
+
+def show_command_center_kpi_cards(items):
+    import html
+    cards = "".join(
+        f"""<div class='cc-kpi-card'>
+                <div class='cc-kpi-title'>{html.escape(title)}</div>
+                <div class='cc-kpi-value'>{html.escape(value)}</div>
+            </div>"""
+        for title, value in items
+    )
+    st.markdown(f"""
+    <div class='cc-kpi-boxes'>
+        {cards}
+    </div>
+    """, unsafe_allow_html=True)
 
 SHEET_ID = "1RKLRXNSFxeq4kXEYxA9y0EFuK-5Ozukrr3ejjxm0764"
 
@@ -154,12 +516,12 @@ df2026, df2025, df2024, df = st.session_state["_jaipuria_data"]
 
 if page == "🎯 Insights":
 
-    st.header("🎯 Insights Dashboard")
+    show_page_heading("🎯 Insights Dashboard")
     admitted_status = ["FULL FEE", "PARTIAL FEE", "WAITLIST FEE"]
     summary_df = df[df["Final Status"].isin(admitted_status)].copy()
 
     # ---------------- Modern Filters / Slicers ----------------
-    st.markdown("### 🎛️ Dashboard Filters")
+    st.markdown('<div class="jaipuria-filter-title">🎛️ Filters</div><div class="jaipuria-filter-area">', unsafe_allow_html=True)
     f1,f2,f3,f4 = st.columns(4)
     prog_col = "Final Course Selected" if "Final Course Selected" in summary_df.columns else None
     gender_col = "Gender" if "Gender" in summary_df.columns else None
@@ -175,6 +537,7 @@ if page == "🎯 Insights":
         gender_filter = st.selectbox("Gender", ["All Genders"] + genders, key="summary_gender")
     with f4:
         state_filter = st.selectbox("State", ["All States"] + states, key="summary_state")
+    st.markdown("</div>", unsafe_allow_html=True)
 
     filtered = summary_df.copy()
     if batch_filter != "All Batches":
@@ -196,11 +559,12 @@ if page == "🎯 Insights":
     eligible_df = filtered[academic_mask]
     batch_counts = filtered.groupby("Batch").size().reindex(["2024-26","2025-27","2026-28"], fill_value=0)
 
-    k1,k2,k3,k4 = st.columns(4)
-    k1.metric("👨‍🎓 Total Admitted Students", f"{len(filtered):,}")
-    k2.metric("🎯 60%+ Throughout", f"{len(eligible_df):,}")
-    k3.metric("🎓 Top Programme", (filtered[prog_col].mode().iloc[0] if prog_col and not filtered.empty and not filtered[prog_col].dropna().empty else "—"))
-    k4.metric("🏆 Best Performing Batch", (batch_counts.idxmax() if batch_counts.sum()>0 else "—"))
+    show_colour_kpi_cards([
+        ("👨‍🎓 Total Admitted Students", f"{len(filtered):,}"),
+        ("🎯 60%+ Throughout", f"{len(eligible_df):,}"),
+        ("🎓 Top Programme", filtered[prog_col].mode().iloc[0] if prog_col and not filtered.empty and not filtered[prog_col].dropna().empty else "—"),
+        ("🏆 Best Performing Batch", batch_counts.idxmax() if batch_counts.sum()>0 else "—")
+    ], "insights")
 
     st.divider()
     c1,c2 = st.columns(2, gap="large")
@@ -231,18 +595,19 @@ if page == "🎯 Insights":
 
 elif page == "👨 Gender":
 
-    st.header("👨 Gender Analysis")
+    show_page_heading("👨 Gender Analysis")
     admitted_status=["FULL FEE","PARTIAL FEE","WAITLIST FEE"]
     gender_df=df[df["Final Status"].isin(admitted_status)].copy()
     gender_df["Gender"]=gender_df["Gender"].fillna("Not Available").astype(str).str.upper().replace({"M":"MALE","F":"FEMALE"})
 
-    st.markdown("### 🎛️ Gender Filters")
+    st.markdown('<div class="jaipuria-filter-title">🎛️ Filters</div><div class="jaipuria-filter-area">', unsafe_allow_html=True)
     f1,f2,f3=st.columns(3)
     programme_col="Final Course Selected" if "Final Course Selected" in gender_df.columns else None
     gprogrammes=sorted(gender_df[programme_col].dropna().astype(str).unique()) if programme_col else []
     with f1: gbatch_filter=st.selectbox("Batch",["All Batches","2024-26","2025-27","2026-28"],key="gender_batch")
     with f2: ggender_filter=st.selectbox("Gender",["All Genders"]+sorted(gender_df["Gender"].unique()),key="gender_gender")
     with f3: gprogramme_filter=st.selectbox("Programme",["All Programmes"]+gprogrammes,key="gender_programme")
+    st.markdown("</div>", unsafe_allow_html=True)
 
     gfiltered=gender_df.copy()
     if gbatch_filter != "All Batches": gfiltered=gfiltered[gfiltered["Batch"]==gbatch_filter]
@@ -256,12 +621,13 @@ elif page == "👨 Gender":
     summary=summary.reset_index()
     summary["Total"]=summary[["MALE","FEMALE"]].sum(axis=1)
 
-    a,b,c,d=st.columns(4)
-    a.metric("👨 Male",int(gfiltered["Gender"].eq("MALE").sum()))
-    b.metric("👩 Female",int(gfiltered["Gender"].eq("FEMALE").sum()))
-    c.metric("👥 Total",len(gfiltered))
     top_batch=summary.loc[summary["Total"].idxmax(),"Batch"] if not summary.empty and summary["Total"].sum()>0 else "—"
-    d.metric("🏆 Best Batch",top_batch)
+    show_colour_kpi_cards([
+        ("👨 Male", int(gfiltered["Gender"].eq("MALE").sum())),
+        ("👩 Female", int(gfiltered["Gender"].eq("FEMALE").sum())),
+        ("👥 Total", len(gfiltered)),
+        ("🏆 Best Batch", top_batch)
+    ], "gender")
 
     c1,c2=st.columns(2,gap="large")
     with c1:
@@ -289,13 +655,13 @@ elif page == "👨 Gender":
 
 elif page == "🎓 Stream":
 
-    st.header("🎓 Graduation Stream Analysis")
+    show_page_heading("🎓 Graduation Stream Analysis")
     admitted_status=["FULL FEE","PARTIAL FEE","WAITLIST FEE"]
     stream_df=df[df["Final Status"].isin(admitted_status)].copy()
     stream_col="Graduation Stream"
     stream_df[stream_col]=stream_df[stream_col].fillna("Not Available").astype(str).str.strip().replace("","Not Available")
 
-    st.markdown("### 🎛️ Stream Filters")
+    st.markdown('<div class="jaipuria-filter-title">🎛️ Filters</div><div class="jaipuria-filter-area">', unsafe_allow_html=True)
     f1,f2,f3=st.columns(3)
     streams=sorted(stream_df[stream_col].unique())
     programme_col="Final Course Selected" if "Final Course Selected" in stream_df.columns else None
@@ -303,6 +669,7 @@ elif page == "🎓 Stream":
     with f1: sbatch_filter=st.selectbox("Batch",["All Batches","2024-26","2025-27","2026-28"],key="stream_batch")
     with f2: stream_filter=st.selectbox("Graduation Stream",["All Streams"]+streams,key="stream_filter")
     with f3: sprogramme_filter=st.selectbox("Programme",["All Programmes"]+sprogrammes,key="stream_programme")
+    st.markdown("</div>", unsafe_allow_html=True)
 
     sfiltered=stream_df.copy()
     if sbatch_filter != "All Batches": sfiltered=sfiltered[sfiltered["Batch"]==sbatch_filter]
@@ -313,13 +680,14 @@ elif page == "🎓 Stream":
                     .reindex(columns=["2024-26","2025-27","2026-28"],fill_value=0).reset_index())
     stream_summary["Total"]=stream_summary[["2024-26","2025-27","2026-28"]].sum(axis=1)
 
-    k1,k2,k3,k4=st.columns(4)
-    k1.metric("👨‍🎓 Total Students",len(sfiltered))
-    k2.metric("🎓 Active Streams",sfiltered[stream_col].nunique())
     top_stream=stream_summary.sort_values("Total",ascending=False).iloc[0][stream_col] if not stream_summary.empty else "—"
-    k3.metric("🏆 Top Stream",top_stream)
     top_batch=sfiltered.groupby("Batch").size().idxmax() if not sfiltered.empty else "—"
-    k4.metric("📈 Best Batch",top_batch)
+    show_colour_kpi_cards([
+        ("👨‍🎓 Total Students", len(sfiltered)),
+        ("🎓 Active Streams", sfiltered[stream_col].nunique()),
+        ("🏆 Top Stream", top_stream),
+        ("📈 Best Batch", top_batch)
+    ], "stream")
 
     c1,c2=st.columns([1.2,1],gap="large")
     with c1:
@@ -470,11 +838,13 @@ elif page == "📝 Entrance Exam":
     exam_list=["CAT","CMAT","MAT","XAT","ATMA","GMAT"]
 
     # TOP ROW — SELECT BATCH + NOTE (exact reference layout)
+    st.markdown('<div class="jaipuria-filter-title">🎛️ Filters</div><div class="jaipuria-filter-area">', unsafe_allow_html=True)
     filter_col,note_col=st.columns([1.05,2.95],gap="small")
     with filter_col:
         selected_batch=st.selectbox("Select Batch",["All Batches"]+batch_order,key="entrance_batch_filter_exact")
     with note_col:
         st.markdown('<div class="batch-note">ℹ️ &nbsp; Note: PGDM-SM is not available for the 2026-28 batch.</div>',unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     display_df=exam_df.copy() if selected_batch=="All Batches" else exam_df[exam_df["Batch"]==selected_batch].copy()
 
@@ -506,6 +876,7 @@ elif page == "📝 Entrance Exam":
         ("🟩","CMAT",counts["CMAT"],"#EAF8F2"),("📘","MAT",counts["MAT"],"#F4EAFE"),
         ("👥","XAT",counts["XAT"],"#FDEEEE"),("🔶","ATMA",counts["ATMA"],"#FFF3E3"),
         ("📄","GMAT",counts["GMAT"],"#EAF8F6")]
+    st.markdown('<span class="kpi-tab-marker kpi-scope-entrance"></span>', unsafe_allow_html=True)
     kcols=st.columns(7,gap="small")
     for col,(icon,label,value,bg) in zip(kcols,cards):
         with col:
@@ -590,7 +961,7 @@ elif page == "📝 Entrance Exam":
 
 elif page == "📍 State & City":
 
-    st.header("📍 State & City Analysis")
+    show_page_heading("📍 State & City Analysis")
     admitted_status=["FULL FEE","PARTIAL FEE","WAITLIST FEE"]
     state_df=df[df["Final Status"].isin(admitted_status)].copy()
     state_col="Correspondence State"
@@ -598,13 +969,14 @@ elif page == "📍 State & City":
     state_df[state_col]=state_df[state_col].fillna("Not Available").astype(str).str.strip().replace("","Not Available")
     state_df[city_col]=state_df[city_col].fillna("Not Available").astype(str).str.strip().replace("","Not Available")
 
-    st.markdown("### 🎛️ Geographic Filters")
+    st.markdown('<div class="jaipuria-filter-title">🎛️ Filters</div><div class="jaipuria-filter-area">', unsafe_allow_html=True)
     f1,f2,f3=st.columns(3)
     states=sorted(state_df[state_col].unique())
     cities=sorted(state_df[city_col].unique())
     with f1: cbatch_filter=st.selectbox("Batch",["All Batches","2024-26","2025-27","2026-28"],key="geo_batch")
     with f2: state_filter_geo=st.selectbox("State",["All States"]+states,key="geo_state")
     with f3: city_filter_geo=st.selectbox("City",["All Cities"]+cities,key="geo_city")
+    st.markdown("</div>", unsafe_allow_html=True)
 
     geo=state_df.copy()
     if cbatch_filter != "All Batches": geo=geo[geo["Batch"]==cbatch_filter]
@@ -613,11 +985,12 @@ elif page == "📍 State & City":
 
     state_total=geo.groupby(state_col).size().sort_values(ascending=False)
     city_total=geo.groupby(city_col).size().sort_values(ascending=False)
-    k1,k2,k3,k4=st.columns(4)
-    k1.metric("👨‍🎓 Total Students",len(geo))
-    k2.metric("📍 States Covered",geo[state_col].nunique())
-    k3.metric("🏙️ Cities Covered",geo[city_col].nunique())
-    k4.metric("🏆 Top State",state_total.index[0] if not state_total.empty else "—")
+    show_colour_kpi_cards([
+        ("👨‍🎓 Total Students", len(geo)),
+        ("📍 States Covered", geo[state_col].nunique()),
+        ("🏙️ Cities Covered", geo[city_col].nunique()),
+        ("🏆 Top State", state_total.index[0] if not state_total.empty else "—")
+    ], "geo")
 
     c1,c2=st.columns(2,gap="large")
     with c1:
@@ -727,6 +1100,7 @@ elif page == "👤 Owner Analysis":
         owner_df["_Owner_Display"] = "Owner column not found"
         owner_col = "_Owner_Display"
 
+    st.markdown('<div class="jaipuria-filter-title">🎛️ Filters</div>', unsafe_allow_html=True)
     st.markdown('<div class="filter-panel">', unsafe_allow_html=True)
     f1, f2, f3, f4, f5, f6 = st.columns(6)
 
@@ -779,6 +1153,7 @@ elif page == "👤 Owner Analysis":
     else:
         owner_value, owner_label = "—", "Owner Performance"
 
+    st.markdown('<span class="kpi-tab-marker kpi-scope-owner"></span>', unsafe_allow_html=True)
     k1,k2,k3,k4,k5 = st.columns(5)
     cards = [
         (k1,"👥 Total Admissions",f"{total_students:,}","Current filtered data"),
@@ -1000,7 +1375,7 @@ elif page == "👤 Owner Analysis":
         st.dataframe(filtered[show_cols] if show_cols else filtered,use_container_width=True)
 
 elif page == "🚀 Command Center":
-    st.markdown("## 🚀 Command Center")
+    show_page_heading("🚀 Command Center")
     st.caption("Complete Admission Intelligence Dashboard")
 
     admitted_status = ["FULL FEE", "PARTIAL FEE", "WAITLIST FEE"]
@@ -1019,6 +1394,7 @@ elif page == "🚀 Command Center":
     gender_col = cc_find(["Gender"])
     state_col = cc_find(["Correspondence State", "State"])
 
+    st.markdown('<div class="jaipuria-filter-title">🎛️ Filters</div>', unsafe_allow_html=True)
     f1, f2, f3 = st.columns(3)
     with f1:
         batch_filter = st.selectbox("📅 Batch", ["All Batches", "2024-26", "2025-27", "2026-28"], key="cc_batch")
@@ -1049,12 +1425,13 @@ elif page == "🚀 Command Center":
     top_exam = top_item(exam_col)
     top_state = top_item(state_col)
 
-    k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("👥 Total Admissions", f"{total:,}")
-    k2.metric("🎓 Top Programme", str(top_programme))
-    k3.metric("📝 Top Exam", str(top_exam))
-    k4.metric("👤 Top Owner", str(top_owner))
-    k5.metric("📍 Top State", str(top_state))
+    show_command_center_kpi_cards([
+        ("👥 Total Admissions", f"{total:,}"),
+        ("🎓 Top Programme", str(top_programme)),
+        ("📝 Top Exam", str(top_exam)),
+        ("👤 Top Owner", str(top_owner)),
+        ("📍 Top State", str(top_state)),
+    ])
 
     st.divider()
 
@@ -1233,6 +1610,7 @@ elif page == "💰 Scholarship":
         scholarship_df = sch_df.iloc[0:0].copy()
 
     # ---------------- Filters ----------------
+    st.markdown('<div class="jaipuria-filter-title">🎛️ Filters</div>', unsafe_allow_html=True)
     st.markdown('<div class="sch-filter">', unsafe_allow_html=True)
     f1,f2,f3,f4,f5,f6 = st.columns(6)
 
@@ -1312,6 +1690,7 @@ elif page == "💰 Scholarship":
         if category_col and not filtered_sch.empty else "—"
     )
 
+    st.markdown('<span class="kpi-tab-marker kpi-scope-scholarship"></span>', unsafe_allow_html=True)
     k1,k2,k3,k4,k5 = st.columns(5)
     cards = [
         (k1,"🎓 Total Scholarship Students",f"{total_students:,}","Current filtered data"),
@@ -1802,5 +2181,5 @@ elif page == "💰 Scholarship":
 
 
 elif page == "📥 Download Report":
-    st.header("📥 Download Report")
+    show_page_heading("📥 Download Report")
 # Test GitHub
