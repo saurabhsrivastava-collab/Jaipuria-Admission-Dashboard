@@ -275,8 +275,6 @@ st.sidebar.markdown(
     f'<div class="jaipuria-sidebar-logo"><img src="data:image/webp;base64,{JAIPURIA_LOGO_B64}" alt="Jaipuria Institute of Management"></div>',
     unsafe_allow_html=True,
 )
-st.sidebar.title("🎓 Jaipuria")
-
 # IMPORTANT PERFORMANCE FIX
 # Data is kept in Streamlit session_state after the first load.
 # Earlier, st.cache_data returned a fresh copy of large DataFrames on every
