@@ -21,8 +21,9 @@ header {visibility:hidden;}
 /* Main Layout */
 .block-container{
     padding-top:0.1rem;
-    padding-left:2rem;
-    padding-right:2rem;
+    padding-bottom:0.5rem;
+    padding-left:1rem;
+    padding-right:1rem;
     max-width:100%;
 }
 
@@ -322,21 +323,22 @@ st.markdown("""
     line-height: 1.15;
 }
 .jaipuria-filter-area {
-    margin-top: 12px;
+    margin-top: 6px !important;
+    margin-bottom: 0 !important;
 }
 /* Command Center KPI cards: colourful static cards */
 .cc-kpi-boxes {
     width: 100%;
     display: flex;
-    gap: 18px;
-    margin: 18px 0 20px 0;
+    gap: 10px;
+    margin: 8px 0 12px 0;
     align-items: stretch;
 }
 .cc-kpi-card {
     flex: 1 1 0;
     min-width: 0;
-    min-height: 104px;
-    padding: 18px 18px 16px 18px;
+    min-height: 90px;
+    padding: 12px 14px;
     box-sizing: border-box;
     border: 1px solid #DCE5EF;
     border-radius: 14px;
@@ -396,13 +398,13 @@ st.markdown("""
 .tab-kpi-grid {
     display:grid;
     grid-template-columns:repeat(4,minmax(0,1fr));
-    gap:18px;
+    gap:12px;
     width:100%;
-    margin:14px 0 20px 0;
+    margin:8px 0 12px 0;
 }
 .tab-kpi-card {
-    min-height:96px;
-    padding:16px 18px 14px 18px;
+    min-height:90px;
+    padding:12px 14px;
     box-sizing:border-box;
     border:1px solid #DCE5EF;
     border-left:5px solid var(--kpi-accent);
