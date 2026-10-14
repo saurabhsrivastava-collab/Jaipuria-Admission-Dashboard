@@ -16,15 +16,27 @@ st.markdown("""
 /* Hide Streamlit Menu */
 #MainMenu {visibility:hidden;}
 footer {visibility:hidden;}
-header {visibility:hidden;}
+header {display:none !important;}
 
-/* Main Layout */
-.block-container{
-    padding-top:0.1rem;
-    padding-bottom:0.5rem;
-    padding-left:1rem;
-    padding-right:1rem;
-    max-width:100%;
+/* Main Layout — compact top spacing like the Library dashboard */
+.block-container,
+div[data-testid="stAppViewBlockContainer"] {
+    padding-top:0.35rem !important;
+    padding-bottom:0.35rem !important;
+    padding-left:1rem !important;
+    padding-right:1rem !important;
+    margin-top:0 !important;
+    max-width:100% !important;
+}
+
+/* Remove excess space reserved for the hidden Streamlit header */
+[data-testid="stAppViewContainer"] > .main {
+    padding-top:0 !important;
+    margin-top:0 !important;
+}
+[data-testid="stAppViewContainer"] > .main > div {
+    padding-top:0 !important;
+    margin-top:0 !important;
 }
 
 /* Sidebar logo */
@@ -57,8 +69,8 @@ section[data-testid="stSidebar"] *{
 h1{
     font-size:44px !important;
     font-weight:700 !important;
-    margin-top:-1.5rem !important;
-    margin-bottom:-0.65rem !important;
+    margin-top:0 !important;
+    margin-bottom:0.15rem !important;
     line-height:1.1 !important;
 }
 
@@ -86,9 +98,10 @@ h3{
     line-height:1.2 !important;
 }
 
-/* Keep the top dashboard header compact — about 1.5-line spacing. */
+/* Keep the top dashboard header compact, without clipping the title. */
 .block-container > div:first-child {
     margin-top:0 !important;
+    padding-top:0 !important;
 }
 [data-testid="stDivider"] {
     margin-top:0.2rem !important;
