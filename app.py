@@ -18,27 +18,66 @@ st.markdown("""
 footer {visibility:hidden;}
 header {display:none !important;}
 
-/* Main Layout — compact top spacing like the Library dashboard */
+/* Main Layout — compact header like the Library dashboard */
 .block-container,
 div[data-testid="stAppViewBlockContainer"] {
-    padding-top:0.35rem !important;
-    padding-bottom:0.35rem !important;
-    padding-left:1rem !important;
-    padding-right:1rem !important;
-    margin-top:0 !important;
-    max-width:100% !important;
+    padding-top: 0 !important;
+    padding-bottom: 0.35rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    margin-top: 0 !important;
+    max-width: 100% !important;
 }
 
-/* Remove excess space reserved for the hidden Streamlit header */
+/* Remove Streamlit's reserved top gap and default element spacing */
 [data-testid="stAppViewContainer"] > .main {
-    padding-top:0 !important;
-    margin-top:0 !important;
+    padding-top: 0 !important;
+    margin-top: 0 !important;
 }
 [data-testid="stAppViewContainer"] > .main > div {
-    padding-top:0 !important;
-    margin-top:0 !important;
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+[data-testid="stAppViewBlockContainer"] > div[data-testid="stVerticalBlock"] {
+    gap: 0.15rem !important;
+}
+[data-testid="stElementContainer"] {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
 }
 
+/* Compact the global title and connection status */
+h1 {
+    font-size: 38px !important;
+    font-weight: 800 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1.12 !important;
+}
+h2 {
+    font-size: 30px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1.12 !important;
+}
+h3 {
+    font-size: 22px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1.15 !important;
+}
+
+/* Keep the first title/status/divider elements tightly grouped */
+[data-testid="stElementContainer"]:has(h1),
+[data-testid="stElementContainer"]:has(h3),
+[data-testid="stElementContainer"]:has([data-testid="stDivider"]) {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+[data-testid="stDivider"] {
+    margin-top: 0.15rem !important;
+    margin-bottom: 0.15rem !important;
+}
 /* Sidebar logo */
 .jaipuria-sidebar-logo {
     width: 100%;
@@ -65,48 +104,7 @@ section[data-testid="stSidebar"] *{
     font-size:18px !important;
 }
 
-/* Headings */
-h1{
-    font-size:44px !important;
-    font-weight:700 !important;
-    margin-top:0 !important;
-    margin-bottom:0.15rem !important;
-    line-height:1.1 !important;
-}
-
-/* Only compact the two top header elements and divider. */
-.block-container > div:first-child div:has(h1) {
-    margin-bottom:-0.35rem !important;
-}
-.block-container > div:first-child div:has(h3) {
-    margin-top:-0.35rem !important;
-    margin-bottom:-0.45rem !important;
-}
-
-
-h2{
-    font-size:34px !important;
-    margin-top:0 !important;
-    margin-bottom:0 !important;
-    line-height:1.1 !important;
-}
-
-h3{
-    font-size:26px !important;
-    margin-top:0 !important;
-    margin-bottom:0 !important;
-    line-height:1.2 !important;
-}
-
-/* Keep the top dashboard header compact, without clipping the title. */
-.block-container > div:first-child {
-    margin-top:0 !important;
-    padding-top:0 !important;
-}
-[data-testid="stDivider"] {
-    margin-top:0.2rem !important;
-    margin-bottom:0.2rem !important;
-}
+/* Heading spacing is controlled by the compact rules above. */
 
 p,span,div,label{
     font-size:18px !important;
